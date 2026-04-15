@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인사팀 위클리 보고</title>
+<script>
+const FIREBASE_URL = 'https://sirloinhr-default-rtdb.asia-southeast1.firebasedatabase.app';
+const ANTHROPIC_KEY = '';
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#ffffff;--bg2:#f7f6f3;--bg3:#f0efe9;
+  --text:#1a1a18;--text2:#6b6a65;--text3:#9c9a92;
+  --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
+  --green:#1D9E75;--red:#A32D2D;--blue:#185FA5;
+  --blue-bg:#E6F1FB;--green-bg:#EAF3DE;--amber-bg:#FAEEDA;--coral-bg:#FAECE7;
+  --blue-t:#185FA5;--green-t:#3B6D11;--amber-t:#854F0B;--coral-t:#993C1D;
+  --warn-bg:#FAEEDA;--warn-bd:#EF9F27;--warn-t:#633806;
+  --r:8px;--rl:12px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1e1e1c;--bg2:#2a2a27;--bg3:#232320;
+    --text:#e8e6de;--text2:#9c9a92;--text3:#6b6a65;
+    --border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.22);
+    --blue-bg:#0c2a42;--blue-t:#85b7eb;
+    --green-bg:#122408;--green-t:#97c459;
+    --amber-bg:#2c1e06;--amber-t:#ef9f27;
+    --coral-bg:#2e100a;--coral-t:#f0997b;
+    --warn-bg:#2c1e06;--warn-bd:#ba7517;--warn-t:#fac775;
+  }
+}
+html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:var(--bg3);color:var(--text);min-height:100vh;}
+.page{max-width:680px;margin:0 auto;padding:0 16px 60px;}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;}
+/* AUTH */
+.auth-logo{font-size:11px;font-weight:600;letter-spacing:0.18em;color:var(--text3);margin-bottom:28px;text-transform:uppercase;}
+.auth-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:28px 24px;width:100%;max-width:360px;}
+.auth-title{font-size:16px;font-weight:600;margin-bottom:6px;}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+.field-lbl{font-size:11px;color:var(--text2);margin-bottom:5px;}
+.field-inp{width:100%;font-size:14px;font-family:inherit;border:0.5px solid var(--border2);border-radius:var(--r);padding:9px 12px;background:var(--bg2);color:var(--text);margin-bottom:6px;}
+.field-inp:focus{outline:none;border-color:var(--text3);background:var(--bg);}
+.auth-btn{width:100%;background:var(--text);color:var(--bg);border:none;border-radius:var(--r);padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:8px;}
+.auth-btn:hover{opacity:0.85;}
+.auth-btn:disabled{opacity:0.38;cursor:not-allowed;}
+.auth-err{font-size:12px;color:var(--red);min-height:18px;}
+.auth-note{font-size:11px;color:var(--text3);margin-top:16px;padding-top:14px;border-top:0.5px solid var(--border);line-height:1.65;}
+/* WEEK BAR */
+.week-bar{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:10px 14px;margin-bottom:10px;}
+.week-bar-top{display:flex;align-items:center;gap:8px;}
+.week-bar select{flex:1;font-size:13px;font-family:inherit;background:none;border:none;color:var(--text);cursor:pointer;outline:none;}
+.wbadge{font-size:11px;border-radius:4px;padding:2px 8px;font-weight:600;flex-shrink:0;}
+.wbadge.now{background:var(--green-bg);color:var(--green-t);}
+.wbadge.next{background:var(--blue-bg);color:var(--blue-t);}
+.wbadge.past{background:var(--bg2);color:var(--text2);}
+.next-week-btn{font-size:12px;background:var(--blue-t);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-family:inherit;font-weight:600;flex-shrink:0;white-space:nowrap;}
+.next-week-btn:hover{opacity:0.85;}
+.week-bar-hint{font-size:11px;color:var(--blue-t);margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);display:none;}
+/* BANNERS */
+.banner{border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:12px;display:none;}
+.banner.readonly{background:var(--amber-bg);border:0.5px solid var(--warn-bd);color:var(--amber-t);}
+.banner.nextweek{background:var(--blue-bg);border:0.5px solid var(--blue-t);color:var(--blue-t);}
+/* APP HEADER */
+.app-header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 16px;}
+.app-title{font-size:18px;font-weight:700;}
+.app-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+.header-right{display:flex;align-items:center;gap:8px;}
+.badge{font-size:11px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:3px 9px;}
+.save-st{font-size:11px;color:var(--text3);}
+.icon-btn{background:none;border:0.5px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer;font-family:inherit;}
+.icon-btn:hover{background:var(--bg2);}
+/* TABS */
+.tabs{display:flex;border-bottom:0.5px solid var(--border);margin-bottom:20px;}
+.tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:14px;color:var(--text2);cursor:pointer;font-family:inherit;margin-bottom:-1px;}
+.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--text);}
+/* CARDS */
+.card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:18px;margin-bottom:12px;}
+.warn-card{border-color:var(--warn-bd);}
+.member-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+.name-input{flex:1;font-size:15px;font-weight:600;background:none;border:none;color:var(--text);padding:0;font-family:inherit;}
+.name-input:focus{outline:none;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0;}
+.dot.on{background:var(--green);}
+.rm-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:0 2px;}
+.sec-row{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+.sec-badge{font-size:11px;font-weight:600;background:var(--bg2);border:0.5px solid var(--border);border-radius:5px;padding:2px 7px;flex-shrink:0;}
+.sec-name{font-size:12px;font-weight:600;color:var(--text2);}
+.warn-badge{background:var(--warn-bg);border-color:var(--warn-bd);color:var(--warn-t);}
+.warn-name{color:var(--warn-t);}
+.col-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.col-lbl{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;}
+textarea{width:100%;font-size:12px;font-family:inherit;border:0.5px solid var(--border);border-radius:var(--r);padding:7px 9px;background:var(--bg2);color:var(--text);resize:none;min-height:68px;line-height:1.65;}
+textarea:focus{outline:none;border-color:var(--border2);background:var(--bg);}
+textarea:disabled{opacity:0.6;cursor:not-allowed;}
+textarea.warn{border-color:var(--warn-bd);min-height:64px;}
+textarea.sm{min-height:52px;}
+.dv{height:0.5px;background:var(--border);margin:14px 0;}
+.add-btn{width:100%;border:0.5px dashed var(--border2);background:none;border-radius:var(--rl);padding:12px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;}
+.add-btn:hover{background:var(--bg2);}
+.row-end{display:flex;justify-content:flex-end;margin-top:16px;}
+.btn-p{background:var(--text);color:var(--bg);border:none;border-radius:var(--r);padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-p:hover{opacity:0.85;}
+.btn-s{background:none;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 14px;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit;}
+.btn-s:hover{background:var(--bg2);}
+.btn-s:disabled{opacity:0.38;cursor:not-allowed;}
+/* CEO */
+.sec-lbl{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;}
+.sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.ai-box{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rl);padding:16px;font-size:13px;line-height:1.75;color:var(--text);min-height:72px;}
+.ld{display:flex;gap:5px;align-items:center;padding:4px 0;}
+.ldd{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:pulse 1.1s infinite;}
+.ldd:nth-child(2){animation-delay:.18s;}
+.ldd:nth-child(3){animation-delay:.36s;}
+@keyframes pulse{0%,80%,100%{transform:scale(.55)}40%{transform:scale(1)}}
+.sc{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:10px;}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
+.sl{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:3px;}
+.sv{font-size:12px;line-height:1.6;white-space:pre-wrap;}
+.tag-w{display:inline-block;font-size:11px;background:var(--coral-bg);color:var(--coral-t);border-radius:4px;padding:2px 8px;margin-top:4px;}
+.cp-row{display:flex;justify-content:flex-end;margin-top:8px;}
+.eh{color:var(--text3);font-size:13px;font-style:italic;}
+/* HISTORY */
+.hist-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.hist-card:hover{border-color:var(--border2);}
+.hist-week{font-size:14px;font-weight:600;}
+.hist-meta{font-size:12px;color:var(--text2);margin-top:3px;}
+/* SETTINGS */
+.sr{display:flex;gap:8px;margin-top:10px;}
+.sr input{flex:1;font-size:13px;font-family:inherit;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;background:var(--bg2);color:var(--text);}
+.sr input:focus{outline:none;border-color:var(--text3);}
+.sm2{font-size:11px;margin-top:4px;min-height:16px;}
+</style>
+</head>
+<body>
+
+<!-- LOCK -->
+<div id="sc-lock" class="center" style="display:none;">
+  <div class="auth-logo">HR Weekly</div>
+  <div class="auth-card">
+    <div class="auth-title">비밀번호 입력</div>
+    <div class="auth-sub">인사팀 위클리 보고 시스템입니다.</div>
+    <div class="field-lbl">비밀번호</div>
+    <input class="field-inp" type="password" id="lock-pw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')unlock();" autocomplete="current-password"/>
+    <div class="auth-err" id="lock-err"></div>
+    <button class="auth-btn" id="unlock-btn" onclick="unlock()">입장하기</button>
+    <div class="auth-note">이 링크와 비밀번호는 팀 내부에서만 공유해주세요.</div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="sc-loading" class="center" style="display:none;">
+  <div class="ld"><div class="ldd"></div><div class="ldd"></div><div class="ldd"></div></div>
+  <div style="font-size:13px;color:var(--text2);margin-top:12px;">불러오는 중...</div>
+</div>
+
+<!-- APP -->
+<div id="sc-app" style="display:none;">
+  <div class="page">
+    <div class="app-header">
+      <div>
+        <div class="app-title">인사팀 위클리 보고</div>
+        <div class="app-sub" id="wk-lbl"></div>
+      </div>
+      <div class="header-right">
+        <span class="badge">AI 기반</span>
+        <span class="save-st" id="sv-st"></span>
+        <button class="icon-btn" onclick="doLock()">잠금</button>
+      </div>
+    </div>
+
+    <!-- 주차 선택 바 -->
+    <div class="week-bar">
+      <div class="week-bar-top">
+        <select id="week-sel" onchange="onWeekChange(this.value)"></select>
+        <span class="wbadge" id="wbadge">이번 주</span>
+        <button class="next-week-btn" id="nw-btn" onclick="startNextWeek()" style="display:none;">다음 주 미리 작성</button>
+      </div>
+      <div class="week-bar-hint" id="nw-hint">목~일요일에 다음 주 보고서를 미리 작성할 수 있어요.</div>
+    </div>
+
+    <div class="banner readonly" id="ban-readonly">과거 주차는 읽기 전용입니다.</div>
+    <div class="banner nextweek" id="ban-next">다음 주 보고서를 미리 작성 중이에요. 월요일 이후 이번 주로 자동 전환돼요.</div>
+
+    <div class="tabs">
+      <button class="tab on" id="t1" onclick="sw('input')">팀원 입력</button>
+      <button class="tab" id="t2" onclick="sw('ceo')">대표님 뷰</button>
+      <button class="tab" id="t3" onclick="sw('history')">히스토리</button>
+      <button class="tab" id="t4" onclick="sw('settings')">설정</button>
+    </div>
+
+    <!-- INPUT -->
+    <div id="pg-input">
+      <div class="card warn-card">
+        <div class="sec-row" style="margin-bottom:8px;">
+          <span class="sec-badge warn-badge">★</span>
+          <span class="sec-name warn-name">대표님 지시 / 요청사항</span>
+        </div>
+        <textarea class="warn" id="ceo-in" placeholder="이번 주 위클리에서 받은 지시·요청사항..." oninput="updCeo(this.value)"></textarea>
+      </div>
+      <div id="mc"></div>
+      <button class="add-btn" id="add-btn" onclick="addM()">+ 팀원 추가</button>
+      <div class="row-end"><button class="btn-p" onclick="sw('ceo')">대표님 뷰로 →</button></div>
+    </div>
+
+    <!-- CEO -->
+    <div id="pg-ceo" style="display:none;">
+      <div id="ceo-vw" style="margin-bottom:16px;display:none;">
+        <div class="sec-lbl">대표님 지시 / 요청사항</div>
+        <div class="sc" style="border-color:var(--warn-bd);"><div class="sv" id="ceo-vt"></div></div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div class="sec-lbl">팀원별 보고</div>
+        <div id="sc-wrap"></div>
+      </div>
+      <div class="dv"></div>
+      <div style="margin-bottom:20px;">
+        <div class="sec-hd"><div class="sec-lbl" style="margin:0;">AI 전체 요약</div><button class="btn-s" id="sum-btn" onclick="genSum()">요약 생성</button></div>
+        <div class="ai-box" id="sum-box"><span class="eh">버튼을 눌러 AI 요약을 생성하세요</span></div>
+        <div class="cp-row" id="sum-cp" style="display:none;"><button class="btn-s" onclick="cp('sum',this)">복사</button></div>
+      </div>
+      <div class="dv"></div>
+      <div style="margin-bottom:20px;">
+        <div class="sec-hd"><div class="sec-lbl" style="margin:0;">회의 어젠다</div><button class="btn-s" id="agd-btn" onclick="genAgd()">어젠다 생성</button></div>
+        <div class="ai-box" id="agd-box"><span class="eh">버튼을 눌러 회의 어젠다를 생성하세요</span></div>
+        <div class="cp-row" id="agd-cp" style="display:none;"><button class="btn-s" onclick="cp('agd',this)">복사</button></div>
+      </div>
+      <div class="dv"></div>
+      <div><div class="sec-hd"><div class="sec-lbl" style="margin:0;">메시지 발송용</div><button class="btn-s" onclick="cpAll(this)">전체 보고서 복사</button></div></div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="pg-history" style="display:none;">
+      <div class="sec-lbl">주차별 기록</div>
+      <div id="hist-list"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="pg-settings" style="display:none;">
+      <div class="card">
+        <div class="sec-lbl">AI 기능 설정</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px;">
+          AI 요약·어젠다 기능을 사용하려면 Anthropic API 키가 필요해요.<br>
+          <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue);">console.anthropic.com</a>에서 발급 받으세요.
+        </div>
+        <div class="field-lbl">Anthropic API 키</div>
+        <div class="sr"><input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off"/><button class="btn-s" onclick="saveApiKey()">저장</button></div>
+        <div class="sm2" id="api-key-msg"></div>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <div class="sec-lbl">비밀번호 변경</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">변경 후 팀원들에게 새 비밀번호를 알려주세요.</div>
+        <div class="sr">
+          <input type="password" id="npw1" placeholder="새 비밀번호" autocomplete="new-password"/>
+          <input type="password" id="npw2" placeholder="확인" autocomplete="new-password"/>
+          <button class="btn-s" onclick="changePw()">변경</button>
+        </div>
+        <div class="sm2" id="cpw-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CATS=[{id:'rec',num:'1',name:'채용'},{id:'eval',num:'2',name:'평가·보상·급여'},{id:'etc',num:'3',name:'기타'}];
+const _D=[126,125,105,74,91,0,14,14,112];
+function _ck(pw){if(pw.length!==_D.length)return false;return[...pw].every((c,i)=>(c.charCodeAt(0)^(i*7+13))===_D[i]);}
+const avBg=['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
+const avFg=['#185FA5','#3B6D11','#854F0B','#993C1D'];
+
+let ms=[],nid=3,ceo='',sumT='',agdT='',stmr=null;
+let curKey='',allWeeks=[],isRO=false,isNext=false;
+
+// ── 주차 키
+function getWeekKey(offset){
+  const d=new Date();
+  if(offset)d.setDate(d.getDate()+offset*7);
+  const day=d.getDay()||7;
+  const mon=new Date(d);mon.setDate(d.getDate()-day+1);
+  const yr=mon.getFullYear();
+  const jan1=new Date(yr,0,1);
+  const wn=Math.ceil(((mon-jan1)/86400000+(jan1.getDay()||7)-1)/7)+1;
+  return `${yr}_W${String(wn).padStart(2,'0')}`;
+}
+function getNextWeekKey(){return getWeekKey(1);}
+function thisWeekKey(){return getWeekKey(0);}
+
+function weekKeyToLabel(key){
+  const [yr,wPart]=key.split('_');
+  const wn=parseInt(wPart.replace('W',''));
+  const jan1=new Date(parseInt(yr),0,1);
+  const firstMon=new Date(jan1);
+  firstMon.setDate(jan1.getDate()+((8-(jan1.getDay()||7))%7||7)-7);
+  const mon=new Date(firstMon);mon.setDate(firstMon.getDate()+(wn-1)*7);
+  const fri=new Date(mon);fri.setDate(mon.getDate()+4);
+  const f=x=>`${x.getMonth()+1}/${x.getDate()}`;
+  const mwn=Math.ceil(mon.getDate()/7);
+  return `${mon.getFullYear()}년 ${mon.getMonth()+1}월 ${mwn}주차 (${f(mon)} ~ ${f(fri)})`;
+}
+
+function dbPath(k){return FIREBASE_URL.replace(/\/$/,'')+'/weeks/'+k+'.json';}
+function authPath(){return FIREBASE_URL.replace(/\/$/,'')+'/weekly_auth.json';}
+function weeksPath(){return FIREBASE_URL.replace(/\/$/,'')+'/weeks.json';}
+
+async function sha256(s){
+  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+'_wk25'));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+  catch{return btoa(s+'_wk25');}
+}
+function getApiKey(){
+  return(typeof ANTHROPIC_KEY!=='undefined'&&ANTHROPIC_KEY)?ANTHROPIC_KEY:(localStorage.getItem('wk_api_key')||'');
+}
+function show(id){['sc-lock','sc-loading','sc-app'].forEach(s=>document.getElementById(s).style.display=s===id?'block':'none');}
+
+function init(){
+  show('sc-lock');
+  document.getElementById('lock-pw').focus();
+  const k=localStorage.getItem('wk_api_key');
+  const el=document.getElementById('api-key-input');
+  if(k&&el)el.value=k;
+}
+
+async function unlock(){
+  const pw=document.getElementById('lock-pw').value;
+  const err=document.getElementById('lock-err');
+  const btn=document.getElementById('unlock-btn');
+  if(!pw){err.textContent='비밀번호를 입력해주세요.';return;}
+  btn.disabled=true;btn.textContent='확인 중...';err.textContent='';
+  let ok=false;
+  try{const r=await fetch(authPath());if(r.ok){const d=await r.json();if(d&&d.hash){const h=await sha256(pw);ok=(h===d.hash);}}}catch{}
+  if(!ok)ok=_ck(pw);
+  if(ok){await loadAndShow();}
+  else{err.textContent='비밀번호가 올바르지 않습니다.';document.getElementById('lock-pw').value='';document.getElementById('lock-pw').focus();}
+  btn.disabled=false;btn.textContent='입장하기';
+}
+
+async function loadAndShow(){
+  show('sc-loading');
+  const today=thisWeekKey();
+  const next=getNextWeekKey();
+  try{
+    const r=await fetch(weeksPath());
+    if(r.ok){const d=await r.json();allWeeks=d?Object.keys(d).sort().reverse():[];}
+  }catch{allWeeks=[];}
+
+  // 기본으로 열 주차 결정: 다음주 미리 작성 중이면 다음주, 아니면 이번주
+  let defaultKey=today;
+  if(allWeeks.includes(next)&&!allWeeks.includes(today))defaultKey=next;
+  if(!allWeeks.includes(defaultKey))allWeeks.unshift(defaultKey);
+
+  curKey=defaultKey;
+  await loadWeek(curKey);
+  buildSelector();
+  show('sc-app');
+}
+
+async function loadWeek(key){
+  try{
+    const r=await fetch(dbPath(key));
+    if(r.ok){const d=await r.json();if(d){ms=d.members||dfltMs();ceo=d.ceo||'';}else{ms=dfltMs();ceo='';}}
+    else{ms=dfltMs();ceo='';}
+  }catch{ms=dfltMs();ceo='';}
+  nid=Math.max(...ms.map(m=>m.id),2)+1;
+  sumT='';agdT='';
+  document.getElementById('ceo-in').value=ceo;
+  document.getElementById('wk-lbl').textContent=weekKeyToLabel(key);
+  render();
+}
+
+function dfltMs(){return[mkM(1,'팀원 1'),mkM(2,'팀원 2')];}
+
+function buildSelector(){
+  const sel=document.getElementById('week-sel');
+  sel.innerHTML='';
+  // 표시할 주차: 이번 주 + 다음 주(있으면) + 과거
+  const today=thisWeekKey(),next=getNextWeekKey();
+  const display=[...new Set([...allWeeks])].sort().reverse();
+  display.forEach(k=>{
+    const opt=document.createElement('option');
+    opt.value=k;
+    let label=weekKeyToLabel(k);
+    if(k===today)label+=' (이번 주)';
+    else if(k===next)label+=' (다음 주 미리보기)';
+    opt.textContent=label;
+    sel.appendChild(opt);
+  });
+  sel.value=curKey;
+  updateUI(curKey);
+}
+
+function updateUI(key){
+  const today=thisWeekKey(),next=getNextWeekKey();
+  isRO=(key!==today&&key!==next);
+  isNext=(key===next&&key!==today);
+  const badge=document.getElementById('wbadge');
+  const nwBtn=document.getElementById('nw-btn');
+  const nwHint=document.getElementById('nw-hint');
+  const banRO=document.getElementById('ban-readonly');
+  const banNext=document.getElementById('ban-next');
+
+  // 배지
+  if(key===today){badge.textContent='이번 주';badge.className='wbadge now';}
+  else if(key===next){badge.textContent='다음 주';badge.className='wbadge next';}
+  else{badge.textContent='과거';badge.className='wbadge past';}
+
+  // 다음 주 미리 작성 버튼: 목~일(4,5,6,0)이고 다음 주가 아직 없을 때
+  const dow=new Date().getDay();
+  const isThuToSun=(dow>=4||dow===0);
+  const nextExists=allWeeks.includes(next);
+  nwBtn.style.display=(isThuToSun&&!nextExists&&key===today)?'flex':'none';
+  nwHint.style.display=(isThuToSun&&!nextExists&&key===today)?'block':'none';
+
+  // 배너
+  banRO.style.display=isRO?'block':'none';
+  banNext.style.display=isNext?'block':'none';
+
+  // 입력 비활성화
+  setTimeout(()=>{
+    document.querySelectorAll('#pg-input textarea').forEach(el=>el.disabled=isRO);
+    document.querySelectorAll('#pg-input .name-input').forEach(el=>el.disabled=isRO);
+    const addBtn=document.getElementById('add-btn');
+    if(addBtn)addBtn.style.display=isRO?'none':'block';
+  },50);
+}
+
+async function onWeekChange(key){
+  show('sc-loading');
+  curKey=key;
+  await loadWeek(key);
+  updateUI(key);
+  show('sc-app');
+  const activeTab=['input','ceo','history','settings'].find((_,i)=>document.getElementById('t'+(i+1))?.className.includes('on'));
+  if(activeTab==='ceo')rCeo();
+}
+
+async function startNextWeek(){
+  const next=getNextWeekKey();
+  if(allWeeks.includes(next)){
+    // 이미 있으면 그냥 이동
+    document.getElementById('week-sel').value=next;
+    await onWeekChange(next);
+    return;
+  }
+  show('sc-loading');
+  curKey=next;
+  ms=dfltMs();ceo='';nid=3;
+  allWeeks.unshift(next);
+  // 빈 데이터로 저장해서 목록에 등록
+  await fetch(dbPath(next),{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(next)})});
+  document.getElementById('ceo-in').value='';
+  document.getElementById('wk-lbl').textContent=weekKeyToLabel(next);
+  render();
+  buildSelector();
+  document.getElementById('week-sel').value=next;
+  updateUI(next);
+  show('sc-app');
+}
+
+function mkM(id,name){const m={id,name};CATS.forEach(c=>{m[`t_${c.id}`]='';m[`n_${c.id}`]='';});m.notes='';return m;}
+function hasCont(m){return CATS.some(c=>m[`t_${c.id}`]||m[`n_${c.id}`])||m.notes;}
+
+function sched(){
+  clearTimeout(stmr);setSt('저장 중...');
+  stmr=setTimeout(async()=>{
+    try{
+      const r=await fetch(dbPath(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(curKey)})});
+      setSt(r.ok?'저장됨':'저장 실패');
+      if(r.ok)setTimeout(()=>setSt(''),2000);
+    }catch{setSt('오프라인 (임시)');}
+  },700);
+}
+function setSt(s){const el=document.getElementById('sv-st');if(el)el.textContent=s;}
+
+function render(){
+  const c=document.getElementById('mc');c.innerHTML='';
+  ms.forEach(m=>{
+    const idx=(m.id-1)%4,f=hasCont(m);
+    const div=document.createElement('div');div.className='card';
+    let h=`<div class="member-header">
+      <div class="avatar" style="background:${avBg[idx]};color:${avFg[idx]};">${(m.name||'?').charAt(0).toUpperCase()}</div>
+      <input class="name-input" value="${m.name}" oninput="upd(${m.id},'name',this.value)" placeholder="이름" ${isRO?'disabled':''}/>
+      <div class="dot${f?' on':''}" id="dot-${m.id}"></div>
+      ${(!isRO&&ms.length>1)?`<button class="rm-btn" onclick="rmM(${m.id})">×</button>`:''}
+    </div>`;
+    CATS.forEach((cat,ci)=>{
+      h+=`<div style="margin-bottom:12px;">
+        <div class="sec-row"><span class="sec-badge">${cat.num}</span><span class="sec-name">${cat.name}</span></div>
+        <div class="col-grid">
+          <div><div class="col-lbl">한 일</div><textarea oninput="upd(${m.id},'t_${cat.id}',this.value)" ${isRO?'disabled':''}>${m[`t_${cat.id}`]}</textarea></div>
+          <div><div class="col-lbl">할 일</div><textarea oninput="upd(${m.id},'n_${cat.id}',this.value)" ${isRO?'disabled':''}>${m[`n_${cat.id}`]}</textarea></div>
+        </div>
+      </div>${ci<CATS.length-1?'<div class="dv"></div>':''}`;
+    });
+    h+=`<div class="dv"></div><div>
+      <div class="sec-row"><span class="sec-badge warn-badge">!</span><span class="sec-name warn-name">논의사항</span></div>
+      <textarea class="sm" oninput="upd(${m.id},'notes',this.value)" ${isRO?'disabled':''}>${m.notes}</textarea>
+    </div>`;
+    div.innerHTML=h;c.appendChild(div);
+  });
+}
+
+function upd(id,f,v){
+  if(isRO)return;
+  const m=ms.find(x=>x.id===id);if(!m)return;
+  m[f]=v;
+  const dot=document.getElementById('dot-'+id);
+  if(dot)dot.className='dot'+(hasCont(m)?' on':'');
+  sched();
+}
+function updCeo(v){if(isRO)return;ceo=v;sched();}
+function addM(){if(isRO)return;ms.push(mkM(nid++,`팀원 ${ms.length+1}`));render();sched();}
+function rmM(id){if(isRO)return;ms=ms.filter(x=>x.id!==id);render();sched();}
+function doLock(){show('sc-lock');document.getElementById('lock-pw').value='';document.getElementById('lock-err').textContent='';document.getElementById('lock-pw').focus();sumT='';agdT='';}
+
+function sw(tab){
+  const map={input:1,ceo:2,history:3,settings:4};
+  ['input','ceo','history','settings'].forEach(t=>{
+    document.getElementById('pg-'+t).style.display=t===tab?'block':'none';
+    document.getElementById('t'+map[t]).className='tab'+(t===tab?' on':'');
+  });
+  if(tab==='ceo')rCeo();
+  if(tab==='history')rHist();
+}
+
+function rCeo(){
+  const cw=document.getElementById('ceo-vw'),ct=document.getElementById('ceo-vt');
+  if(ceo.trim()){cw.style.display='block';ct.textContent=ceo;}else cw.style.display='none';
+  const w=document.getElementById('sc-wrap');w.innerHTML='';
+  if(!ms.some(hasCont)){w.innerHTML='<div class="eh" style="padding:8px 0;">아직 입력된 내용이 없습니다</div>';return;}
+  ms.forEach(m=>{
+    if(!hasCont(m))return;
+    const d=document.createElement('div');d.className='sc';
+    let h=`<div style="font-size:14px;font-weight:700;margin-bottom:10px;">${m.name}</div>`;
+    CATS.forEach(cat=>{
+      const tw=m[`t_${cat.id}`],nw=m[`n_${cat.id}`];if(!tw&&!nw)return;
+      h+=`<div style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+          <span class="sec-badge" style="font-size:10px;padding:1px 6px;">${cat.num}</span>
+          <span class="sec-name">${cat.name}</span>
+        </div>
+        <div class="sg">
+          <div><div class="sl">한 일</div><div class="sv">${tw||'—'}</div></div>
+          <div><div class="sl">할 일</div><div class="sv">${nw||'—'}</div></div>
+        </div>
+      </div>`;
+    });
+    if(m.notes)h+=`<div style="margin-top:6px;padding-top:8px;border-top:0.5px solid var(--border);">
+      <span class="tag-w">논의사항</span><div class="sv" style="margin-top:5px;">${m.notes}</div>
+    </div>`;
+    d.innerHTML=h;w.appendChild(d);
+  });
+}
+
+async function rHist(){
+  const c=document.getElementById('hist-list');
+  c.innerHTML='<div class="eh">불러오는 중...</div>';
+  try{
+    const r=await fetch(weeksPath());
+    const all=r.ok?await r.json():{};
+    const sorted=Object.keys(all||{}).sort().reverse();
+    c.innerHTML='';
+    if(!sorted.length){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
+    const today=thisWeekKey(),next=getNextWeekKey();
+    sorted.forEach(k=>{
+      const d=all[k]||{};
+      const div=document.createElement('div');div.className='hist-card';
+      div.onclick=()=>{document.getElementById('week-sel').value=k;onWeekChange(k);sw('input');};
+      const mc=d.members?d.members.filter(m=>hasCont(m)).length:0;
+      const upd=d.updated?new Date(d.updated).toLocaleDateString('ko-KR'):'';
+      let tag='';
+      if(k===today)tag='<span class="wbadge now" style="font-size:10px;">이번 주</span>';
+      else if(k===next)tag='<span class="wbadge next" style="font-size:10px;">다음 주</span>';
+      div.innerHTML=`<div>
+        <div class="hist-week">${weekKeyToLabel(k)}</div>
+        <div class="hist-meta">${mc}명 입력${upd?' · '+upd:''}</div>
+      </div>${tag}`;
+      c.appendChild(div);
+    });
+  }catch{c.innerHTML='<div class="eh">로드 실패</div>';}
+}
+
+function rpt(){
+  let s='';
+  if(ceo.trim())s+=`[대표님 지시/요청사항]\n${ceo}\n\n`;
+  return s+ms.map(m=>{
+    let r=`[${m.name}]`;
+    CATS.forEach(cat=>{r+=`\n  ${cat.num}. ${cat.name}\n     한 일: ${m[`t_${cat.id}`]||'없음'}\n     할 일: ${m[`n_${cat.id}`]||'없음'}`;});
+    if(m.notes)r+=`\n  ▶ 논의사항: ${m.notes}`;
+    return r;
+  }).join('\n\n');
+}
+
+async function callAI(prompt){
+  const key=getApiKey();
+  if(!key)throw new Error('API 키가 없습니다. 설정 탭에서 입력해주세요.');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+  if(!r.ok)throw new Error(`API 오류 (${r.status})`);
+  return(await r.json()).content[0].text;
+}
+
+async function genSum(){
+  const btn=document.getElementById('sum-btn'),box=document.getElementById('sum-box');
+  btn.disabled=true;btn.textContent='생성 중...';
+  box.innerHTML='<div class="ld"><div class="ldd"></div><div class="ldd"></div><div class="ldd"></div></div>';
+  try{
+    sumT=await callAI(`다음은 인사팀의 ${weekKeyToLabel(curKey)} 위클리 보고입니다.\n\n${rpt()}\n\n대표님께 보고하는 형식으로 채용·평가보상·기타 순서로 주요 성과와 다음 주 계획을 간결하게 요약해주세요. 대표님 지시사항 이행 현황도 포함하고, 논의사항은 별도로 강조해주세요. 자연스러운 문어체 3~4문단으로 작성해주세요.`);
+    box.innerHTML=`<div style="white-space:pre-wrap;">${sumT}</div>`;
+    document.getElementById('sum-cp').style.display='flex';
+  }catch(e){box.innerHTML=`<span style="color:var(--red);">${e.message}</span>`;}
+  btn.disabled=false;btn.textContent='다시 생성';
+}
+
+async function genAgd(){
+  const btn=document.getElementById('agd-btn'),box=document.getElementById('agd-box');
+  btn.disabled=true;btn.textContent='생성 중...';
+  box.innerHTML='<div class="ld"><div class="ldd"></div><div class="ldd"></div><div class="ldd"></div></div>';
+  try{
+    agdT=await callAI(`다음 ${weekKeyToLabel(curKey)} 인사팀 위클리 보고를 바탕으로 대표님과의 미팅 어젠다를 작성해주세요.\n\n${rpt()}\n\n대표님 지시사항 이행 보고를 첫 번째로 배치하고, 논의사항, 채용·평가보상·기타 순으로 구성. 각 항목에 담당자와 예상 소요시간 포함, 총 미팅 시간 제안해주세요.`);
+    box.innerHTML=`<div style="white-space:pre-wrap;">${agdT}</div>`;
+    document.getElementById('agd-cp').style.display='flex';
+  }catch(e){box.innerHTML=`<span style="color:var(--red);">${e.message}</span>`;}
+  btn.disabled=false;btn.textContent='다시 생성';
+}
+
+function cp(t,btn){
+  navigator.clipboard.writeText(t==='sum'?sumT:agdT).then(()=>{const o=btn.textContent;btn.textContent='복사됨!';setTimeout(()=>btn.textContent=o,1500);});
+}
+function cpAll(btn){
+  let t=`📋 ${weekKeyToLabel(curKey)} 인사팀 위클리 보고\n\n`;
+  if(ceo.trim())t+=`[대표님 지시/요청사항]\n${ceo}\n\n`;
+  ms.forEach(m=>{
+    t+=`▪ ${m.name}\n`;
+    CATS.forEach(cat=>{t+=`${cat.num}. ${cat.name}\n  한 일: ${m[`t_${cat.id}`]||'없음'}\n  할 일: ${m[`n_${cat.id}`]||'없음'}\n`;});
+    if(m.notes)t+=`▶ 논의사항: ${m.notes}\n`;
+    t+='\n';
+  });
+  if(sumT)t+=`\n[AI 요약]\n${sumT}\n`;
+  navigator.clipboard.writeText(t).then(()=>{const o=btn.textContent;btn.textContent='복사됨!';setTimeout(()=>btn.textContent=o,1500);});
+}
+
+function saveApiKey(){
+  const k=document.getElementById('api-key-input').value.trim();
+  const msg=document.getElementById('api-key-msg');
+  if(!k){msg.style.color='var(--red)';msg.textContent='API 키를 입력해주세요.';return;}
+  localStorage.setItem('wk_api_key',k);
+  msg.style.color='var(--green)';msg.textContent='저장됐습니다.';
+  setTimeout(()=>msg.textContent='',2000);
+}
+
+async function changePw(){
+  const p1=document.getElementById('npw1').value,p2=document.getElementById('npw2').value;
+  const msg=document.getElementById('cpw-msg');
+  if(!p1||p1.length<4){msg.style.color='var(--red)';msg.textContent='4자 이상 입력해주세요.';return;}
+  if(p1!==p2){msg.style.color='var(--red)';msg.textContent='비밀번호가 일치하지 않습니다.';return;}
+  msg.style.color='var(--text2)';msg.textContent='변경 중...';
+  try{
+    const h=await sha256(p1);
+    const r=await fetch(authPath(),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({hash:h})});
+    msg.style.color=r.ok?'var(--green)':'var(--red)';
+    msg.textContent=r.ok?'변경 완료! 새 비밀번호를 팀원들에게 알려주세요.':'저장 실패.';
+  }catch{msg.style.color='var(--red)';msg.textContent='오류가 발생했습니다.';}
+  document.getElementById('npw1').value='';document.getElementById('npw2').value='';
+}
+
+init();
+</script>
+</body>
+</html>
