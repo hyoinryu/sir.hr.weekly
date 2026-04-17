@@ -100,11 +100,11 @@ html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-se
 .warn-name{color:var(--warn-t);}
 .col-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .col-lbl{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;}
-textarea{width:100%;font-size:12px;font-family:inherit;border:0.5px solid var(--border);border-radius:var(--r);padding:7px 9px;background:var(--bg2);color:var(--text);resize:none;min-height:68px;line-height:1.65;}
+textarea{width:100%;font-size:13px;font-family:inherit;border:0.5px solid var(--border);border-radius:var(--r);padding:9px 11px;background:var(--bg2);color:var(--text);resize:none;min-height:110px;line-height:1.75;overflow:hidden;}
 textarea:focus{outline:none;border-color:var(--border2);background:var(--bg);}
 textarea:disabled{opacity:0.6;cursor:not-allowed;}
-textarea.warn{border-color:var(--warn-bd);min-height:64px;}
-textarea.sm{min-height:52px;}
+textarea.warn{border-color:var(--warn-bd);min-height:90px;}
+textarea.sm{min-height:90px;}
 .dv{height:0.5px;background:var(--border);margin:14px 0;}
 .row-end{display:flex;justify-content:flex-end;margin-top:16px;}
 .btn-p{background:var(--text);color:var(--bg);border:none;border-radius:var(--r);padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
@@ -820,6 +820,22 @@ function doLock(){
   document.getElementById('lock-pw').focus();
   sumT='';agdT='';isDirty=false;
 }
+
+// ── textarea 자동 높이 조절
+function autoResize(el){
+  el.style.height='auto';
+  el.style.height=(el.scrollHeight+2)+'px';
+}
+function initAutoResize(){
+  document.querySelectorAll('textarea').forEach(el=>{
+    autoResize(el);
+    el.addEventListener('input',()=>autoResize(el));
+  });
+}
+
+// render 후 자동 높이 적용
+const _origRender=render;
+render=function(){_origRender();setTimeout(initAutoResize,50);};
 
 init();
 </script>
