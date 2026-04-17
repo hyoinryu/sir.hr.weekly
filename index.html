@@ -7,6 +7,9 @@
 <script>
 const FIREBASE_URL = 'https://sirloinhr-default-rtdb.asia-southeast1.firebasedatabase.app';
 const ANTHROPIC_KEY = '';
+// 고정 팀원 순서
+const FIXED_MEMBERS = ['류효인', '허원희', '김명진'];
+const LEAD_NAME = '류효인';
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -64,14 +67,20 @@ html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-se
 .banner.readonly{background:var(--amber-bg);border:0.5px solid var(--warn-bd);color:var(--amber-t);}
 .banner.nextweek{background:var(--blue-bg);border:0.5px solid var(--blue-t);color:var(--blue-t);}
 /* APP HEADER */
-.app-header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 16px;}
+.app-header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px;}
 .app-title{font-size:18px;font-weight:700;}
 .app-sub{font-size:12px;color:var(--text2);margin-top:3px;}
-.header-right{display:flex;align-items:center;gap:8px;}
+.header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
 .badge{font-size:11px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:3px 9px;}
 .save-st{font-size:11px;color:var(--text3);}
 .icon-btn{background:none;border:0.5px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer;font-family:inherit;}
 .icon-btn:hover{background:var(--bg2);}
+/* 저장/새로고침 버튼 */
+.save-btn{background:var(--text);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+.save-btn:hover{opacity:0.85;}
+.save-btn:disabled{opacity:0.38;cursor:not-allowed;}
+.refresh-btn{background:none;border:0.5px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text2);cursor:pointer;font-family:inherit;}
+.refresh-btn:hover{background:var(--bg2);}
 /* TABS */
 .tabs{display:flex;border-bottom:0.5px solid var(--border);margin-bottom:20px;}
 .tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:14px;color:var(--text2);cursor:pointer;font-family:inherit;margin-bottom:-1px;}
@@ -81,11 +90,9 @@ html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-se
 .warn-card{border-color:var(--warn-bd);}
 .member-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 .avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
-.name-input{flex:1;font-size:15px;font-weight:600;background:none;border:none;color:var(--text);padding:0;font-family:inherit;}
-.name-input:focus{outline:none;}
+.name-label{flex:1;font-size:15px;font-weight:600;color:var(--text);}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0;}
 .dot.on{background:var(--green);}
-.rm-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:0 2px;}
 .sec-row{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
 .sec-badge{font-size:11px;font-weight:600;background:var(--bg2);border:0.5px solid var(--border);border-radius:5px;padding:2px 7px;flex-shrink:0;}
 .sec-name{font-size:12px;font-weight:600;color:var(--text2);}
@@ -99,15 +106,13 @@ textarea:disabled{opacity:0.6;cursor:not-allowed;}
 textarea.warn{border-color:var(--warn-bd);min-height:64px;}
 textarea.sm{min-height:52px;}
 .dv{height:0.5px;background:var(--border);margin:14px 0;}
-.add-btn{width:100%;border:0.5px dashed var(--border2);background:none;border-radius:var(--rl);padding:12px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;}
-.add-btn:hover{background:var(--bg2);}
 .row-end{display:flex;justify-content:flex-end;margin-top:16px;}
 .btn-p{background:var(--text);color:var(--bg);border:none;border-radius:var(--r);padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
 .btn-p:hover{opacity:0.85;}
 .btn-s{background:none;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 14px;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit;}
 .btn-s:hover{background:var(--bg2);}
 .btn-s:disabled{opacity:0.38;cursor:not-allowed;}
-/* CEO */
+/* CEO VIEW */
 .sec-lbl{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;}
 .sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 .ai-box{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rl);padding:16px;font-size:13px;line-height:1.75;color:var(--text);min-height:72px;}
@@ -116,11 +121,21 @@ textarea.sm{min-height:52px;}
 .ldd:nth-child(2){animation-delay:.18s;}
 .ldd:nth-child(3){animation-delay:.36s;}
 @keyframes pulse{0%,80%,100%{transform:scale(.55)}40%{transform:scale(1)}}
-.sc{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:10px;}
-.sg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
-.sl{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:3px;}
-.sv{font-size:12px;line-height:1.6;white-space:pre-wrap;}
-.tag-w{display:inline-block;font-size:11px;background:var(--coral-bg);color:var(--coral-t);border-radius:4px;padding:2px 8px;margin-top:4px;}
+/* 팀장 카드 (크게) */
+.lead-card{background:var(--bg);border:1.5px solid var(--text);border-radius:var(--rl);padding:20px;margin-bottom:16px;}
+.lead-name{font-size:17px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.lead-badge{font-size:10px;background:var(--text);color:var(--bg);border-radius:4px;padding:2px 7px;font-weight:700;}
+.lead-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
+.lead-lbl{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;}
+.lead-val{font-size:13px;line-height:1.65;white-space:pre-wrap;}
+/* 팀원 카드 (작게) */
+.team-section-lbl{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;margin-top:4px;}
+.team-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;}
+.team-name{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;}
+.team-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.team-lbl{font-size:10px;font-weight:600;color:var(--text3);margin-bottom:2px;}
+.team-val{font-size:11px;line-height:1.55;white-space:pre-wrap;color:var(--text2);}
+.tag-w{display:inline-block;font-size:10px;background:var(--coral-bg);color:var(--coral-t);border-radius:4px;padding:1px 6px;margin-top:3px;}
 .cp-row{display:flex;justify-content:flex-end;margin-top:8px;}
 .eh{color:var(--text3);font-size:13px;font-style:italic;}
 /* HISTORY */
@@ -133,6 +148,8 @@ textarea.sm{min-height:52px;}
 .sr input{flex:1;font-size:13px;font-family:inherit;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;background:var(--bg2);color:var(--text);}
 .sr input:focus{outline:none;border-color:var(--text3);}
 .sm2{font-size:11px;margin-top:4px;min-height:16px;}
+/* 미저장 경고 */
+.unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(--warn-bd);display:inline-block;margin-right:3px;display:none;}
 </style>
 </head>
 <body>
@@ -166,8 +183,9 @@ textarea.sm{min-height:52px;}
         <div class="app-sub" id="wk-lbl"></div>
       </div>
       <div class="header-right">
-        <span class="badge">AI 기반</span>
         <span class="save-st" id="sv-st"></span>
+        <button class="refresh-btn" onclick="doRefresh()" title="새로고침">↻ 새로고침</button>
+        <button class="save-btn" id="save-btn" onclick="doSave()">저장</button>
         <button class="icon-btn" onclick="doLock()">잠금</button>
       </div>
     </div>
@@ -183,7 +201,7 @@ textarea.sm{min-height:52px;}
     </div>
 
     <div class="banner readonly" id="ban-readonly">과거 주차는 읽기 전용입니다.</div>
-    <div class="banner nextweek" id="ban-next">다음 주 보고서를 미리 작성 중이에요. 월요일 이후 이번 주로 자동 전환돼요.</div>
+    <div class="banner nextweek" id="ban-next">다음 주 보고서를 미리 작성 중이에요.</div>
 
     <div class="tabs">
       <button class="tab on" id="t1" onclick="sw('input')">팀원 입력</button>
@@ -199,23 +217,31 @@ textarea.sm{min-height:52px;}
           <span class="sec-badge warn-badge">★</span>
           <span class="sec-name warn-name">대표님 지시 / 요청사항</span>
         </div>
-        <textarea class="warn" id="ceo-in" placeholder="이번 주 위클리에서 받은 지시·요청사항..." oninput="updCeo(this.value)"></textarea>
+        <textarea class="warn" id="ceo-in" placeholder="이번 주 위클리에서 받은 지시·요청사항..." oninput="markDirty()"></textarea>
       </div>
       <div id="mc"></div>
-      <button class="add-btn" id="add-btn" onclick="addM()">+ 팀원 추가</button>
-      <div class="row-end"><button class="btn-p" onclick="sw('ceo')">대표님 뷰로 →</button></div>
+      <div class="row-end" style="gap:8px;">
+        <button class="btn-s" onclick="doSave()" id="save-btn2">저장하고 대표님 뷰로 →</button>
+      </div>
     </div>
 
     <!-- CEO -->
     <div id="pg-ceo" style="display:none;">
       <div id="ceo-vw" style="margin-bottom:16px;display:none;">
         <div class="sec-lbl">대표님 지시 / 요청사항</div>
-        <div class="sc" style="border-color:var(--warn-bd);"><div class="sv" id="ceo-vt"></div></div>
+        <div style="background:var(--warn-bg);border:0.5px solid var(--warn-bd);border-radius:var(--r);padding:12px 14px;font-size:13px;line-height:1.7;" id="ceo-vt"></div>
       </div>
-      <div style="margin-bottom:20px;">
-        <div class="sec-lbl">팀원별 보고</div>
-        <div id="sc-wrap"></div>
+
+      <!-- 팀장 (류효인) 크게 -->
+      <div class="sec-lbl">이번 주 보고</div>
+      <div id="lead-wrap"></div>
+
+      <!-- 팀원 작게 -->
+      <div id="team-wrap-outer" style="display:none;">
+        <div class="team-section-lbl">팀원 보고</div>
+        <div id="team-wrap"></div>
       </div>
+
       <div class="dv"></div>
       <div style="margin-bottom:20px;">
         <div class="sec-hd"><div class="sec-lbl" style="margin:0;">AI 전체 요약</div><button class="btn-s" id="sum-btn" onclick="genSum()">요약 생성</button></div>
@@ -271,8 +297,25 @@ function _ck(pw){if(pw.length!==_D.length)return false;return[...pw].every((c,i)
 const avBg=['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
 const avFg=['#185FA5','#3B6D11','#854F0B','#993C1D'];
 
-let ms=[],nid=3,ceo='',sumT='',agdT='',stmr=null;
-let curKey='',allWeeks=[],isRO=false,isNext=false;
+let ms=[],ceo='',sumT='',agdT='';
+let curKey='',allWeeks=[],isRO=false,isDirty=false;
+
+// ── 고정 팀원으로 초기화
+function dfltMs(){
+  return FIXED_MEMBERS.map((name,i)=>{
+    const m={id:i+1,name};
+    CATS.forEach(c=>{m[`t_${c.id}`]='';m[`n_${c.id}`]='';});
+    m.notes='';
+    return m;
+  });
+}
+
+function mkM(id,name){
+  const m={id,name};
+  CATS.forEach(c=>{m[`t_${c.id}`]='';m[`n_${c.id}`]='';});
+  m.notes='';
+  return m;
+}
 
 // ── 주차 키
 function getWeekKey(offset){
@@ -315,6 +358,20 @@ function getApiKey(){
 }
 function show(id){['sc-lock','sc-loading','sc-app'].forEach(s=>document.getElementById(s).style.display=s===id?'block':'none');}
 
+// ── 미저장 상태 관리
+function markDirty(){
+  isDirty=true;
+  setSt('미저장 변경사항 있음');
+}
+function markClean(){
+  isDirty=false;
+}
+
+// ── 페이지 이탈 경고
+window.addEventListener('beforeunload',e=>{
+  if(isDirty){e.preventDefault();e.returnValue='';}
+});
+
 function init(){
   show('sc-lock');
   document.getElementById('lock-pw').focus();
@@ -345,37 +402,45 @@ async function loadAndShow(){
     const r=await fetch(weeksPath());
     if(r.ok){const d=await r.json();allWeeks=d?Object.keys(d).sort().reverse():[];}
   }catch{allWeeks=[];}
-
-  // 기본으로 열 주차 결정: 다음주 미리 작성 중이면 다음주, 아니면 이번주
   let defaultKey=today;
   if(allWeeks.includes(next)&&!allWeeks.includes(today))defaultKey=next;
   if(!allWeeks.includes(defaultKey))allWeeks.unshift(defaultKey);
-
   curKey=defaultKey;
   await loadWeek(curKey);
   buildSelector();
   show('sc-app');
+  const k=localStorage.getItem('wk_api_key');
+  const el=document.getElementById('api-key-input');
+  if(k&&el)el.value=k;
 }
 
 async function loadWeek(key){
   try{
     const r=await fetch(dbPath(key));
-    if(r.ok){const d=await r.json();if(d){ms=d.members||dfltMs();ceo=d.ceo||'';}else{ms=dfltMs();ceo='';}}
-    else{ms=dfltMs();ceo='';}
+    if(r.ok){
+      const d=await r.json();
+      if(d){
+        // 고정 팀원 순서 유지하면서 저장된 데이터 복원
+        const saved=d.members||[];
+        ms=FIXED_MEMBERS.map((name,i)=>{
+          const found=saved.find(m=>m.name===name)||mkM(i+1,name);
+          found.id=i+1;found.name=name;
+          return found;
+        });
+        ceo=d.ceo||'';
+      }else{ms=dfltMs();ceo='';}
+    }else{ms=dfltMs();ceo='';}
   }catch{ms=dfltMs();ceo='';}
-  nid=Math.max(...ms.map(m=>m.id),2)+1;
-  sumT='';agdT='';
+  sumT='';agdT='';isDirty=false;
   document.getElementById('ceo-in').value=ceo;
   document.getElementById('wk-lbl').textContent=weekKeyToLabel(key);
   render();
+  setSt('');
 }
-
-function dfltMs(){return[mkM(1,'팀원 1'),mkM(2,'팀원 2')];}
 
 function buildSelector(){
   const sel=document.getElementById('week-sel');
   sel.innerHTML='';
-  // 표시할 주차: 이번 주 + 다음 주(있으면) + 과거
   const today=thisWeekKey(),next=getNextWeekKey();
   const display=[...new Set([...allWeeks])].sort().reverse();
   display.forEach(k=>{
@@ -394,128 +459,154 @@ function buildSelector(){
 function updateUI(key){
   const today=thisWeekKey(),next=getNextWeekKey();
   isRO=(key!==today&&key!==next);
-  isNext=(key===next&&key!==today);
+  const isNext=(key===next&&key!==today);
   const badge=document.getElementById('wbadge');
   const nwBtn=document.getElementById('nw-btn');
   const nwHint=document.getElementById('nw-hint');
   const banRO=document.getElementById('ban-readonly');
   const banNext=document.getElementById('ban-next');
-
-  // 배지
+  const saveBtn=document.getElementById('save-btn');
+  const saveBtn2=document.getElementById('save-btn2');
   if(key===today){badge.textContent='이번 주';badge.className='wbadge now';}
   else if(key===next){badge.textContent='다음 주';badge.className='wbadge next';}
   else{badge.textContent='과거';badge.className='wbadge past';}
-
-  // 다음 주 미리 작성 버튼: 목~일(4,5,6,0)이고 다음 주가 아직 없을 때
   const dow=new Date().getDay();
   const isThuToSun=(dow>=4||dow===0);
-  const nextExists=allWeeks.includes(next);
-  nwBtn.style.display=(isThuToSun&&!nextExists&&key===today)?'flex':'none';
-  nwHint.style.display=(isThuToSun&&!nextExists&&key===today)?'block':'none';
-
-  // 배너
+  nwBtn.style.display=(isThuToSun&&!allWeeks.includes(next)&&key===today)?'flex':'none';
+  nwHint.style.display=(isThuToSun&&!allWeeks.includes(next)&&key===today)?'block':'none';
   banRO.style.display=isRO?'block':'none';
   banNext.style.display=isNext?'block':'none';
-
-  // 입력 비활성화
+  if(saveBtn)saveBtn.disabled=isRO;
+  if(saveBtn2)saveBtn2.style.display=isRO?'none':'flex';
   setTimeout(()=>{
     document.querySelectorAll('#pg-input textarea').forEach(el=>el.disabled=isRO);
-    document.querySelectorAll('#pg-input .name-input').forEach(el=>el.disabled=isRO);
-    const addBtn=document.getElementById('add-btn');
-    if(addBtn)addBtn.style.display=isRO?'none':'block';
   },50);
 }
 
 async function onWeekChange(key){
+  if(isDirty){
+    const ok=confirm('저장하지 않은 내용이 있습니다. 이동하시겠어요?');
+    if(!ok){document.getElementById('week-sel').value=curKey;return;}
+  }
   show('sc-loading');
   curKey=key;
   await loadWeek(key);
   updateUI(key);
   show('sc-app');
-  const activeTab=['input','ceo','history','settings'].find((_,i)=>document.getElementById('t'+(i+1))?.className.includes('on'));
-  if(activeTab==='ceo')rCeo();
+  const active=document.querySelector('.tab.on')?.id;
+  if(active==='t2')rCeo();
+}
+
+// ── 저장 버튼
+async function doSave(){
+  if(isRO)return;
+  const btn=document.getElementById('save-btn');
+  const btn2=document.getElementById('save-btn2');
+  if(btn)btn.disabled=true;
+  setSt('저장 중...');
+  // textarea 값 수동 수집
+  ceo=document.getElementById('ceo-in').value;
+  ms.forEach((m,i)=>{
+    CATS.forEach(cat=>{
+      const tw=document.getElementById(`ta_t_${cat.id}_${m.id}`);
+      const nw=document.getElementById(`ta_n_${cat.id}_${m.id}`);
+      const nt=document.getElementById(`ta_notes_${m.id}`);
+      if(tw)m[`t_${cat.id}`]=tw.value;
+      if(nw)m[`n_${cat.id}`]=nw.value;
+      if(nt)m.notes=nt.value;
+    });
+  });
+  try{
+    const r=await fetch(dbPath(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(curKey)})});
+    if(r.ok){
+      setSt('저장 완료 ✓');
+      markClean();
+      setTimeout(()=>setSt(''),3000);
+      // 대표님 뷰로 이동 (save-btn2에서만)
+      if(btn2&&document.activeElement===btn2){sw('ceo');}
+    }else{setSt('저장 실패');}
+  }catch{setSt('오프라인 — 저장 실패');}
+  if(btn)btn.disabled=isRO;
+}
+
+// ── 새로고침 (로그인 유지)
+async function doRefresh(){
+  if(isDirty){
+    const ok=confirm('저장하지 않은 내용이 있습니다. 새로고침하면 사라져요. 계속할까요?');
+    if(!ok)return;
+  }
+  show('sc-loading');
+  await loadWeek(curKey);
+  buildSelector();
+  document.getElementById('week-sel').value=curKey;
+  updateUI(curKey);
+  show('sc-app');
+  setSt('새로고침 완료');
+  setTimeout(()=>setSt(''),2000);
 }
 
 async function startNextWeek(){
   const next=getNextWeekKey();
-  if(allWeeks.includes(next)){
-    // 이미 있으면 그냥 이동
-    document.getElementById('week-sel').value=next;
-    await onWeekChange(next);
-    return;
-  }
+  if(allWeeks.includes(next)){document.getElementById('week-sel').value=next;await onWeekChange(next);return;}
   show('sc-loading');
   curKey=next;
-  ms=dfltMs();ceo='';nid=3;
+  ms=dfltMs();ceo='';isDirty=false;
   allWeeks.unshift(next);
-  // 빈 데이터로 저장해서 목록에 등록
   await fetch(dbPath(next),{method:'PUT',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(next)})});
   document.getElementById('ceo-in').value='';
   document.getElementById('wk-lbl').textContent=weekKeyToLabel(next);
-  render();
-  buildSelector();
+  render();buildSelector();
   document.getElementById('week-sel').value=next;
   updateUI(next);
   show('sc-app');
 }
 
-function mkM(id,name){const m={id,name};CATS.forEach(c=>{m[`t_${c.id}`]='';m[`n_${c.id}`]='';});m.notes='';return m;}
-function hasCont(m){return CATS.some(c=>m[`t_${c.id}`]||m[`n_${c.id}`])||m.notes;}
-
-function sched(){
-  clearTimeout(stmr);setSt('저장 중...');
-  stmr=setTimeout(async()=>{
-    try{
-      const r=await fetch(dbPath(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(curKey)})});
-      setSt(r.ok?'저장됨':'저장 실패');
-      if(r.ok)setTimeout(()=>setSt(''),2000);
-    }catch{setSt('오프라인 (임시)');}
-  },700);
-}
 function setSt(s){const el=document.getElementById('sv-st');if(el)el.textContent=s;}
+function hasCont(m){return CATS.some(c=>m[`t_${c.id}`]||m[`n_${c.id}`])||m.notes;}
 
 function render(){
   const c=document.getElementById('mc');c.innerHTML='';
   ms.forEach(m=>{
-    const idx=(m.id-1)%4,f=hasCont(m);
+    const idx=ms.indexOf(m)%4;
+    const f=hasCont(m);
     const div=document.createElement('div');div.className='card';
     let h=`<div class="member-header">
-      <div class="avatar" style="background:${avBg[idx]};color:${avFg[idx]};">${(m.name||'?').charAt(0).toUpperCase()}</div>
-      <input class="name-input" value="${m.name}" oninput="upd(${m.id},'name',this.value)" placeholder="이름" ${isRO?'disabled':''}/>
+      <div class="avatar" style="background:${avBg[idx]};color:${avFg[idx]};">${(m.name||'?').charAt(0)}</div>
+      <span class="name-label">${m.name}</span>
       <div class="dot${f?' on':''}" id="dot-${m.id}"></div>
-      ${(!isRO&&ms.length>1)?`<button class="rm-btn" onclick="rmM(${m.id})">×</button>`:''}
     </div>`;
     CATS.forEach((cat,ci)=>{
       h+=`<div style="margin-bottom:12px;">
         <div class="sec-row"><span class="sec-badge">${cat.num}</span><span class="sec-name">${cat.name}</span></div>
         <div class="col-grid">
-          <div><div class="col-lbl">한 일</div><textarea oninput="upd(${m.id},'t_${cat.id}',this.value)" ${isRO?'disabled':''}>${m[`t_${cat.id}`]}</textarea></div>
-          <div><div class="col-lbl">할 일</div><textarea oninput="upd(${m.id},'n_${cat.id}',this.value)" ${isRO?'disabled':''}>${m[`n_${cat.id}`]}</textarea></div>
+          <div><div class="col-lbl">한 일</div><textarea id="ta_t_${cat.id}_${m.id}" oninput="markDirty();updDot(${m.id})" ${isRO?'disabled':''}>${m[`t_${cat.id}`]}</textarea></div>
+          <div><div class="col-lbl">할 일</div><textarea id="ta_n_${cat.id}_${m.id}" oninput="markDirty();updDot(${m.id})" ${isRO?'disabled':''}>${m[`n_${cat.id}`]}</textarea></div>
         </div>
       </div>${ci<CATS.length-1?'<div class="dv"></div>':''}`;
     });
     h+=`<div class="dv"></div><div>
       <div class="sec-row"><span class="sec-badge warn-badge">!</span><span class="sec-name warn-name">논의사항</span></div>
-      <textarea class="sm" oninput="upd(${m.id},'notes',this.value)" ${isRO?'disabled':''}>${m.notes}</textarea>
+      <textarea class="sm" id="ta_notes_${m.id}" oninput="markDirty();updDot(${m.id})" ${isRO?'disabled':''}>${m.notes}</textarea>
     </div>`;
     div.innerHTML=h;c.appendChild(div);
   });
 }
 
-function upd(id,f,v){
-  if(isRO)return;
+function updDot(id){
   const m=ms.find(x=>x.id===id);if(!m)return;
-  m[f]=v;
+  const tw_rec=document.getElementById(`ta_t_rec_${id}`)?.value||'';
+  const nw_rec=document.getElementById(`ta_n_rec_${id}`)?.value||'';
+  const tw_eval=document.getElementById(`ta_t_eval_${id}`)?.value||'';
+  const nw_eval=document.getElementById(`ta_n_eval_${id}`)?.value||'';
+  const tw_etc=document.getElementById(`ta_t_etc_${id}`)?.value||'';
+  const nw_etc=document.getElementById(`ta_n_etc_${id}`)?.value||'';
+  const notes=document.getElementById(`ta_notes_${id}`)?.value||'';
+  const f=tw_rec||nw_rec||tw_eval||nw_eval||tw_etc||nw_etc||notes;
   const dot=document.getElementById('dot-'+id);
-  if(dot)dot.className='dot'+(hasCont(m)?' on':'');
-  sched();
+  if(dot)dot.className='dot'+(f?' on':'');
 }
-function updCeo(v){if(isRO)return;ceo=v;sched();}
-function addM(){if(isRO)return;ms.push(mkM(nid++,`팀원 ${ms.length+1}`));render();sched();}
-function rmM(id){if(isRO)return;ms=ms.filter(x=>x.id!==id);render();sched();}
-function doLock(){show('sc-lock');document.getElementById('lock-pw').value='';document.getElementById('lock-err').textContent='';document.getElementById('lock-pw').focus();sumT='';agdT='';}
 
 function sw(tab){
   const map={input:1,ceo:2,history:3,settings:4};
@@ -523,36 +614,86 @@ function sw(tab){
     document.getElementById('pg-'+t).style.display=t===tab?'block':'none';
     document.getElementById('t'+map[t]).className='tab'+(t===tab?' on':'');
   });
-  if(tab==='ceo')rCeo();
+  if(tab==='ceo'){collectValues();rCeo();}
   if(tab==='history')rHist();
 }
 
+// 대표님 뷰 전환 전 textarea 값 수집
+function collectValues(){
+  ceo=document.getElementById('ceo-in').value;
+  ms.forEach(m=>{
+    CATS.forEach(cat=>{
+      const tw=document.getElementById(`ta_t_${cat.id}_${m.id}`);
+      const nw=document.getElementById(`ta_n_${cat.id}_${m.id}`);
+      const nt=document.getElementById(`ta_notes_${m.id}`);
+      if(tw)m[`t_${cat.id}`]=tw.value;
+      if(nw)m[`n_${cat.id}`]=nw.value;
+      if(nt)m.notes=nt.value;
+    });
+  });
+}
+
 function rCeo(){
+  // 대표님 지시사항
   const cw=document.getElementById('ceo-vw'),ct=document.getElementById('ceo-vt');
   if(ceo.trim()){cw.style.display='block';ct.textContent=ceo;}else cw.style.display='none';
-  const w=document.getElementById('sc-wrap');w.innerHTML='';
-  if(!ms.some(hasCont)){w.innerHTML='<div class="eh" style="padding:8px 0;">아직 입력된 내용이 없습니다</div>';return;}
-  ms.forEach(m=>{
-    if(!hasCont(m))return;
-    const d=document.createElement('div');d.className='sc';
-    let h=`<div style="font-size:14px;font-weight:700;margin-bottom:10px;">${m.name}</div>`;
+
+  // 팀장(류효인) 카드 - 크게
+  const leadWrap=document.getElementById('lead-wrap');leadWrap.innerHTML='';
+  const lead=ms.find(m=>m.name===LEAD_NAME);
+  if(lead){
+    const d=document.createElement('div');d.className='lead-card';
+    let h=`<div class="lead-name">${lead.name} <span class="lead-badge">팀장</span></div>`;
     CATS.forEach(cat=>{
-      const tw=m[`t_${cat.id}`],nw=m[`n_${cat.id}`];if(!tw&&!nw)return;
-      h+=`<div style="margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
-          <span class="sec-badge" style="font-size:10px;padding:1px 6px;">${cat.num}</span>
-          <span class="sec-name">${cat.name}</span>
+      const tw=lead[`t_${cat.id}`],nw=lead[`n_${cat.id}`];
+      if(!tw&&!nw)return;
+      h+=`<div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px;">
+          <span class="sec-badge">${cat.num}</span><span class="sec-name">${cat.name}</span>
         </div>
-        <div class="sg">
-          <div><div class="sl">한 일</div><div class="sv">${tw||'—'}</div></div>
-          <div><div class="sl">할 일</div><div class="sv">${nw||'—'}</div></div>
+        <div class="lead-grid">
+          <div><div class="lead-lbl">한 일</div><div class="lead-val">${tw||'—'}</div></div>
+          <div><div class="lead-lbl">할 일</div><div class="lead-val">${nw||'—'}</div></div>
         </div>
       </div>`;
     });
-    if(m.notes)h+=`<div style="margin-top:6px;padding-top:8px;border-top:0.5px solid var(--border);">
-      <span class="tag-w">논의사항</span><div class="sv" style="margin-top:5px;">${m.notes}</div>
+    if(lead.notes)h+=`<div style="padding-top:10px;border-top:0.5px solid var(--border);">
+      <span class="tag-w" style="font-size:11px;">논의사항</span>
+      <div class="lead-val" style="margin-top:6px;font-size:13px;">${lead.notes}</div>
     </div>`;
-    d.innerHTML=h;w.appendChild(d);
+    if(!hasCont(lead))h+=`<div class="eh">아직 입력된 내용이 없습니다</div>`;
+    d.innerHTML=h;leadWrap.appendChild(d);
+  }
+
+  // 팀원 카드 - 작게
+  const teamWrap=document.getElementById('team-wrap');
+  const teamOuter=document.getElementById('team-wrap-outer');
+  teamWrap.innerHTML='';
+  const teamMs=ms.filter(m=>m.name!==LEAD_NAME);
+  const hasTeam=teamMs.some(hasCont);
+  teamOuter.style.display=hasTeam?'block':'none';
+  teamMs.forEach(m=>{
+    if(!hasCont(m))return;
+    const d=document.createElement('div');d.className='team-card';
+    let h=`<div class="team-name">${m.name}</div>`;
+    CATS.forEach(cat=>{
+      const tw=m[`t_${cat.id}`],nw=m[`n_${cat.id}`];if(!tw&&!nw)return;
+      h+=`<div style="margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+          <span class="sec-badge" style="font-size:10px;padding:1px 5px;">${cat.num}</span>
+          <span style="font-size:10px;font-weight:600;color:var(--text3);">${cat.name}</span>
+        </div>
+        <div class="team-grid">
+          <div><div class="team-lbl">한 일</div><div class="team-val">${tw||'—'}</div></div>
+          <div><div class="team-lbl">할 일</div><div class="team-val">${nw||'—'}</div></div>
+        </div>
+      </div>`;
+    });
+    if(m.notes)h+=`<div style="padding-top:6px;border-top:0.5px solid var(--border);margin-top:4px;">
+      <span class="tag-w">논의사항</span>
+      <div class="team-val" style="margin-top:3px;">${m.notes}</div>
+    </div>`;
+    d.innerHTML=h;teamWrap.appendChild(d);
   });
 }
 
@@ -585,6 +726,7 @@ async function rHist(){
 }
 
 function rpt(){
+  collectValues();
   let s='';
   if(ceo.trim())s+=`[대표님 지시/요청사항]\n${ceo}\n\n`;
   return s+ms.map(m=>{
@@ -633,6 +775,7 @@ function cp(t,btn){
   navigator.clipboard.writeText(t==='sum'?sumT:agdT).then(()=>{const o=btn.textContent;btn.textContent='복사됨!';setTimeout(()=>btn.textContent=o,1500);});
 }
 function cpAll(btn){
+  collectValues();
   let t=`📋 ${weekKeyToLabel(curKey)} 인사팀 위클리 보고\n\n`;
   if(ceo.trim())t+=`[대표님 지시/요청사항]\n${ceo}\n\n`;
   ms.forEach(m=>{
@@ -667,6 +810,15 @@ async function changePw(){
     msg.textContent=r.ok?'변경 완료! 새 비밀번호를 팀원들에게 알려주세요.':'저장 실패.';
   }catch{msg.style.color='var(--red)';msg.textContent='오류가 발생했습니다.';}
   document.getElementById('npw1').value='';document.getElementById('npw2').value='';
+}
+
+function doLock(){
+  if(isDirty){const ok=confirm('저장하지 않은 내용이 있습니다. 잠금하시겠어요?');if(!ok)return;}
+  show('sc-lock');
+  document.getElementById('lock-pw').value='';
+  document.getElementById('lock-err').textContent='';
+  document.getElementById('lock-pw').focus();
+  sumT='';agdT='';isDirty=false;
 }
 
 init();
