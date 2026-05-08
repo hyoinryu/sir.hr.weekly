@@ -29,12 +29,22 @@ html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-se
 .page{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:0 16px 60px;}
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;position:relative;z-index:1;}
 .ptcl{position:absolute;pointer-events:none;animation:ptclFall linear infinite;}
-@keyframes ptclFall{0%{transform:translateY(-40px) translateX(0px) rotate(0deg);opacity:1;}
+@keyframes ptclFall{
+  0%{transform:translateY(-40px) translateX(0) rotate(0deg);opacity:1;}
   50%{transform:translateY(50vh) translateX(var(--sx,15px)) rotate(180deg);opacity:.8;}
-  100%{transform:translateY(110vh) translateX(0px) rotate(360deg);opacity:0;}}
-@keyframes ptclRain{0%{transform:translateY(-20px) skewX(-15deg);opacity:.7;}
+  100%{transform:translateY(110vh) translateX(0) rotate(360deg);opacity:0;}}
+@keyframes ptclRain{
+  0%{transform:translateY(-20px) skewX(-15deg);opacity:.7;}
   100%{transform:translateY(110vh) skewX(-15deg);opacity:.3;}}
-@keyframes ptclFloat{0%,100%{transform:translateY(0) scaleX(1);}50%{transform:translateY(-8px) scaleX(1.1);}}
+@keyframes cloudDrift{0%{transform:translateX(0);}100%{transform:translateX(calc(-100vw - 400px));}}
+@keyframes fogDrift{
+  0%{transform:translateX(-20vw);opacity:0;}15%{opacity:.3;}85%{opacity:.2;}
+  100%{transform:translateX(120vw);opacity:0;}}
+@keyframes sunSpin{0%{transform:translate(-50%,-50%) rotate(0deg);}100%{transform:translate(-50%,-50%) rotate(360deg);}}
+@keyframes sunGlow{0%,100%{opacity:.7;box-shadow:0 0 40px var(--rc,#FFD70088),0 0 80px var(--rc,#FFD70044);}50%{opacity:1;box-shadow:0 0 60px var(--rc,#FFD700aa),0 0 120px var(--rc,#FFD70066);}}
+@keyframes sparkTwinkle{0%,100%{opacity:0;transform:scale(0) rotate(0deg);}50%{opacity:.9;transform:scale(1) rotate(180deg);}}
+@keyframes lightningFlash{0%,82%,100%{opacity:0;}83%,85%,87%{opacity:1;}84%,86%{opacity:.2;}}
+@keyframes screenFlash{0%,80%,100%{opacity:0;}81%,83%{opacity:.18;}82%{opacity:.05;}}
 /* ── WEATHER STRIP ── */
 .wx-strip{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--rl);background:rgba(255,255,255,0.6);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.8);flex-shrink:0;}
 .wx-emoji{font-size:20px;line-height:1;}
@@ -353,56 +363,175 @@ async function fetchWeather(){
 }
 
 function applyWeatherBg(cond,season){
-  const bg=document.getElementById('wx-bg');
-  bg.innerHTML='';
-  // 배경색 설정
-  const bgColors={
-    spring:'#fce8f2',summer:'#ddeeff',autumn:'#fae8d4',winter:'#dce8f5',
-    rain:'#d8dfe8',snow:'#e8f0f8',fog:'#e0e2e8',cloudy:'#dde0e8',thunder:'#d0d0da'
+  const bg=document.getElementById('wx-bg');bg.innerHTML='';
+  const theme=['rain','snow','fog','cloudy','thunder'].includes(cond)?cond:season;
+  const grads={
+    spring:'radial-gradient(ellipse at 75% 0%,#f8dded 0%,#f5eaf8 45%,#efe8f8 100%)',
+    summer:'radial-gradient(ellipse at 75% 0%,#c4e4ff 0%,#d8eeff 50%,#edf5ff 100%)',
+    autumn:'radial-gradient(ellipse at 75% 0%,#f5d8ac 0%,#f8e4c4 45%,#f8eedc 100%)',
+    winter:'radial-gradient(ellipse at 75% 0%,#bcd8f0 0%,#d4eaf8 50%,#ecf4fc 100%)',
+    rain:  'linear-gradient(150deg,#c4d0dc 0%,#d4dfe8 55%,#e2e8f0 100%)',
+    snow:  'radial-gradient(ellipse at 50% 0%,#cce0f5 0%,#e0eefb 55%,#eef4ff 100%)',
+    fog:   'linear-gradient(180deg,#d4d8e0 0%,#e0e2e8 55%,#eaecf0 100%)',
+    cloudy:'linear-gradient(150deg,#ccd0da 0%,#d8dce4 55%,#e4e6ec 100%)',
+    thunder:'linear-gradient(150deg,#b4b0c8 0%,#c4c0d4 55%,#d0cedc 100%)',
   };
-  const theme=(['rain','snow','fog','cloudy','thunder'].includes(cond))?cond:season;
-  document.documentElement.style.setProperty('--bg3-override',bgColors[theme]||'#f0efe9');
-
-  // 파티클 생성
-  const configs={
-    spring:{count:18,cls:'petal',colors:['#ffb7c5','#ff9eb5','#ffd0dd','#ff85a1'],w:8,h:6,rot:true,sway:true},
-    autumn:{count:14,cls:'leaf',colors:['#e8621a','#d4420a','#f0821a','#c84808','#e89030'],w:12,h:9,rot:true,sway:true},
-    winter:{count:22,cls:'snow',colors:['rgba(255,255,255,0.9)','rgba(220,235,255,0.8)'],w:5,h:5,rot:false,sway:false},
-    snow:{count:25,cls:'snow',colors:['rgba(255,255,255,0.9)','rgba(200,220,255,0.8)'],w:6,h:6,rot:false,sway:false},
-    rain:{count:35,cls:'rain',colors:['rgba(100,140,190,0.4)'],w:2,h:16,rot:false,sway:false},
-    summer:{count:0},fog:{count:0},cloudy:{count:0},thunder:{count:0}
-  };
-  const cfg=configs[theme]||{count:0};
-  if(!cfg.count)return;
-
-  for(let i=0;i<cfg.count;i++){
-    const el=document.createElement('div');
-    el.className='ptcl';
-    const color=cfg.colors[Math.floor(Math.random()*cfg.colors.length)];
-    const left=Math.random()*105;
-    const delay=Math.random()*8;
-    const dur=cfg.cls==='rain'?(0.6+Math.random()*0.4):(4+Math.random()*6);
-    const size=0.7+Math.random()*0.6;
-    const sway=cfg.sway?(Math.random()*30-15)+'px':'0px';
-
-    el.style.cssText=`
-      left:${left}vw;
-      animation-delay:-${delay}s;
-      animation-duration:${dur}s;
-      --sx:${sway};
-      width:${cfg.w*size}px;height:${cfg.h*size}px;
-      border-radius:${cfg.cls==='petal'?'60% 40% 50% 50%':cfg.cls==='leaf'?'50% 20%':'50%'};
-      background:${color};
-      ${cfg.cls==='rain'?'animation-name:ptclRain;border-radius:2px;':''}
-    `;
-    if(cfg.cls==='petal'||cfg.cls==='leaf'){
-      el.style.transform=`rotate(${Math.random()*360}deg)`;
-    }
-    bg.appendChild(el);
-  }
+  const bgBase={spring:'#f2e8f5',summer:'#e0f0ff',autumn:'#f8ecdc',winter:'#e0ecf8',
+    rain:'#d8e0e8',snow:'#e4eef8',fog:'#e0e2e8',cloudy:'#d8dce4',thunder:'#c8c4d4'};
+  bg.style.cssText=`position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;background:${grads[theme]||grads.spring};`;
+  document.documentElement.style.setProperty('--bg3-override',bgBase[theme]||'#f0efe9');
+  addWxIllust(bg,theme);
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function addWxIllust(bg,theme){
+  const svg=getWxSvg(theme);if(!svg)return;
+  const pos={
+    spring:{bottom:'0',right:'0',w:'210px',h:'210px',op:'0.22'},
+    summer:{top:'-20px',right:'-20px',w:'180px',h:'180px',op:'0.2'},
+    autumn:{bottom:'0',right:'0',w:'210px',h:'210px',op:'0.2'},
+    winter:{top:'-20px',right:'-20px',w:'190px',h:'190px',op:'0.22'},
+    snow:{bottom:'0',right:'0',w:'220px',h:'240px',op:'0.2'},
+    rain:{bottom:'0',right:'0',w:'210px',h:'230px',op:'0.22'},
+    thunder:{top:'0',right:'0',w:'220px',h:'200px',op:'0.2'},
+    cloudy:{top:'0',right:'0',w:'240px',h:'160px',op:'0.2'},
+    fog:{bottom:'0',left:'0',right:'0',w:'100%',h:'150px',op:'0.18'},
+  }[theme]||{bottom:'0',right:'0',w:'200px',h:'200px',op:'0.2'};
+  const wrap=document.createElement('div');
+  let css=`position:absolute;opacity:${pos.op};pointer-events:none;width:${pos.w};height:${pos.h};`;
+  if(pos.top!==undefined)css+=`top:${pos.top};`;
+  if(pos.bottom!==undefined)css+=`bottom:${pos.bottom};`;
+  if(pos.right!==undefined)css+=`right:${pos.right};`;
+  if(pos.left!==undefined)css+=`left:${pos.left};`;
+  wrap.style.cssText=css;
+  wrap.innerHTML=svg;
+  bg.appendChild(wrap);
+}
+
+function getWxSvg(theme){
+  const sf=(cx,cy,r)=>{
+    let s='';
+    for(let i=0;i<3;i++){
+      const a=i*60*Math.PI/180,dx=Math.cos(a)*r,dy=Math.sin(a)*r;
+      s+=`<line x1="${cx-dx}" y1="${cy-dy}" x2="${cx+dx}" y2="${cy+dy}" stroke="#a8c8e8" stroke-width="2.5" stroke-linecap="round"/>`;
+      [0.5,-0.5].forEach(t=>{
+        const mx=cx+Math.cos(a)*r*t,my=cy+Math.sin(a)*r*t;
+        const a2=(i*60+90)*Math.PI/180;
+        s+=`<line x1="${mx}" y1="${my}" x2="${mx+Math.cos(a2)*r*.35}" y2="${my+Math.sin(a2)*r*.35}" stroke="#a8c8e8" stroke-width="1.8" stroke-linecap="round"/>`;
+      });
+    }
+    return s;
+  };
+  const ray=(cx,cy,r1,r2,n,col)=>{let s='';for(let i=0;i<n;i++){const a=i*(360/n)*Math.PI/180;s+=`<line x1="${cx+Math.cos(a)*r1}" y1="${cy+Math.sin(a)*r1}" x2="${cx+Math.cos(a)*r2}" y2="${cy+Math.sin(a)*r2}" stroke="${col}" stroke-width="4" stroke-linecap="round" opacity="0.8"/>`;}return s;};
+  const blossom=(cx,cy,r,col)=>{let s='';for(let i=0;i<5;i++){const a=(i*72-90)*Math.PI/180,px=cx+Math.cos(a)*r*.55,py=cy+Math.sin(a)*r*.55;s+=`<ellipse cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" rx="${(r*.45).toFixed(1)}" ry="${(r*.65).toFixed(1)}" fill="${col}" transform="rotate(${i*72},${cx},${cy})" opacity="0.88"/>`;}s+=`<circle cx="${cx}" cy="${cy}" r="${(r*.3).toFixed(1)}" fill="#fff0d0" opacity="0.9"/>`;return s;};
+
+  const svgs={
+    spring:`<svg viewBox="0 0 210 210" xmlns="http://www.w3.org/2000/svg">
+      <path d="M200,200 Q135,160 88,108 Q66,86 46,46" stroke="#c090a8" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M88,108 Q104,86 122,79" stroke="#c090a8" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+      <path d="M122,140 Q133,118 153,108" stroke="#c090a8" stroke-width="4" fill="none" stroke-linecap="round"/>
+      ${blossom(56,52,'#e8a8bc',11)}
+      ${blossom(92,80,'#ebb5c5',10)}
+      ${blossom(122,79,'#e2a8b8',9)}
+      ${blossom(153,108,'#eaafc2',10)}
+      ${blossom(135,162,'#e0a0b4',9)}
+    </svg>`,
+
+    summer:`<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="80" cy="80" r="36" fill="#FFD040" opacity="0.88"/>
+      ${ray(80,80,40,62,8,'#FFB800')}
+    </svg>`,
+
+    autumn:`<svg viewBox="0 0 210 210" xmlns="http://www.w3.org/2000/svg">
+      <path d="M105,185 Q100,140 105,100 Q108,70 90,45" stroke="#c05010" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M105,100 Q80,60 55,55 Q75,80 72,100 Q88,85 105,100" fill="#D4580A" opacity="0.78"/>
+      <path d="M105,100 Q130,60 158,55 Q138,80 140,100 Q122,85 105,100" fill="#C04008" opacity="0.75"/>
+      <path d="M105,100 Q90,40 105,10 Q120,40 105,100" fill="#E07020" opacity="0.7"/>
+      <path d="M105,100 Q62,90 45,110 Q72,104 80,120 Q90,108 105,100" fill="#B83808" opacity="0.72"/>
+      <path d="M105,100 Q148,90 165,110 Q138,104 132,120 Q122,108 105,100" fill="#D06018" opacity="0.72"/>
+      <path d="M105,185 Q98,170 88,168 Q95,175 105,185" fill="#a04010" opacity="0.6"/>
+      <ellipse cx="150" cy="170" rx="28" ry="22" fill="#E07020" opacity="0.6" transform="rotate(-30,150,170)"/>
+      <path d="M150,157 Q148,150 152,145" stroke="#b05010" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="55" cy="175" rx="22" ry="17" fill="#C84808" opacity="0.55" transform="rotate(20,55,175)"/>
+      <path d="M55,163 Q53,156 57,151" stroke="#a04010" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </svg>`,
+
+    winter:`<svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="130" cy="52" r="30" fill="#d8eeff" opacity="0.88" stroke="#a8d0f0" stroke-width="2"/>
+      ${ray(130,52,33,52,8,'#b0d0f0')}
+      ${sf(38,100,15)}
+      ${sf(78,155,11)}
+      ${sf(160,125,13)}
+    </svg>`,
+
+    snow:`<svg viewBox="0 0 200 230" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="100" cy="178" r="42" fill="white" stroke="#aac8e0" stroke-width="2.5"/>
+      <circle cx="100" cy="118" r="30" fill="white" stroke="#aac8e0" stroke-width="2.5"/>
+      <circle cx="100" cy="72" r="21" fill="white" stroke="#aac8e0" stroke-width="2.5"/>
+      <circle cx="92" cy="67" r="3.2" fill="#4488aa"/>
+      <circle cx="108" cy="67" r="3.2" fill="#4488aa"/>
+      <ellipse cx="100" cy="74" rx="2" ry="4.5" fill="#e09050" transform="rotate(-5,100,74)"/>
+      <circle cx="93.5" cy="80.5" r="1.8" fill="#5590aa"/>
+      <circle cx="100" cy="82.5" r="1.8" fill="#5590aa"/>
+      <circle cx="106.5" cy="80.5" r="1.8" fill="#5590aa"/>
+      <circle cx="100" cy="108" r="3.2" fill="#7aabcc"/>
+      <circle cx="100" cy="121" r="3.2" fill="#7aabcc"/>
+      <circle cx="100" cy="134" r="3.2" fill="#7aabcc"/>
+      <rect x="82" y="45" width="36" height="27" rx="3" fill="#5580a0"/>
+      <rect x="72" y="50" width="56" height="7" rx="3" fill="#4470a0"/>
+      <path d="M74,93 Q100,99 126,93" stroke="#e05050" stroke-width="7.5" fill="none" stroke-linecap="round"/>
+      <path d="M120,93 Q126,106 120,118" stroke="#e05050" stroke-width="6.5" fill="none" stroke-linecap="round"/>
+      ${sf(22,45,13)}
+      ${sf(170,75,11)}
+      ${sf(35,168,10)}
+      ${sf(178,168,12)}
+    </svg>`,
+
+    rain:`<svg viewBox="0 0 200 230" xmlns="http://www.w3.org/2000/svg">
+      <path d="M18,115 Q18,32 100,27 Q182,32 182,115 Z" fill="#6090c8" opacity="0.82"/>
+      <path d="M18,115 Q33,98 50,115 Q67,132 84,115 Q100,98 116,115 Q133,132 150,115 Q167,98 182,115" fill="#5080b8" opacity="0.88"/>
+      <line x1="100" y1="115" x2="18" y2="115" stroke="#4070a8" stroke-width="1.8" opacity="0.5"/>
+      <line x1="100" y1="115" x2="46" y2="50" stroke="#4070a8" stroke-width="1.8" opacity="0.5"/>
+      <line x1="100" y1="115" x2="100" y2="27" stroke="#4070a8" stroke-width="1.8" opacity="0.5"/>
+      <line x1="100" y1="115" x2="154" y2="50" stroke="#4070a8" stroke-width="1.8" opacity="0.5"/>
+      <line x1="100" y1="115" x2="182" y2="115" stroke="#4070a8" stroke-width="1.8" opacity="0.5"/>
+      <line x1="100" y1="115" x2="100" y2="192" stroke="#4070a8" stroke-width="6" stroke-linecap="round"/>
+      <path d="M100,192 Q100,215 118,215 Q136,215 136,198" stroke="#4070a8" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <line x1="38" y1="148" x2="30" y2="175" stroke="#6090c8" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+      <line x1="72" y1="152" x2="64" y2="179" stroke="#6090c8" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+      <line x1="142" y1="148" x2="134" y2="175" stroke="#6090c8" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+      <line x1="168" y1="152" x2="160" y2="179" stroke="#6090c8" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+      <line x1="55" y1="182" x2="47" y2="209" stroke="#6090c8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+      <line x1="155" y1="182" x2="147" y2="209" stroke="#6090c8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+    </svg>`,
+
+    thunder:`<svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="108" cy="92" rx="75" ry="44" fill="#8080a8" opacity="0.78"/>
+      <circle cx="68" cy="75" r="35" fill="#8080a8" opacity="0.78"/>
+      <circle cx="142" cy="72" r="30" fill="#8080a8" opacity="0.78"/>
+      <ellipse cx="108" cy="62" rx="48" ry="34" fill="#8888b0" opacity="0.88"/>
+      <polygon points="112,108 90,158 109,158 93,196 134,138 112,138 128,108" fill="#ffe840" stroke="#ffd000" stroke-width="1.5"/>
+    </svg>`,
+
+    cloudy:`<svg viewBox="0 0 240 160" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="165" cy="98" rx="62" ry="38" fill="#c8ccd8" opacity="0.68"/>
+      <circle cx="132" cy="78" r="30" fill="#c8ccd8" opacity="0.68"/>
+      <circle cx="182" cy="74" r="26" fill="#c8ccd8" opacity="0.68"/>
+      <ellipse cx="88" cy="110" rx="74" ry="44" fill="#d8dce8" opacity="0.88"/>
+      <circle cx="46" cy="88" r="36" fill="#d8dce8" opacity="0.88"/>
+      <circle cx="108" cy="82" r="40" fill="#d8dce8" opacity="0.88"/>
+      <circle cx="152" cy="94" r="30" fill="#d8dce8" opacity="0.82"/>
+    </svg>`,
+
+    fog:`<svg viewBox="0 0 100% 140" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width:100%;height:140px">
+      <path d="M0,25 Q15,18 30,25 Q45,32 60,25 Q75,18 90,25 Q105,32 120,25 Q140,18 160,25 Q180,32 200,25 L200,35 Q180,42 160,35 Q140,28 120,35 Q105,42 90,35 Q75,28 60,35 Q45,42 30,35 Q15,28 0,35 Z" fill="rgba(200,204,212,0.35)"/>
+      <path d="M0,55 Q20,46 42,55 Q64,64 86,55 Q108,46 130,55 Q152,64 174,55 Q196,46 220,55 L220,65 Q196,74 174,65 Q152,56 130,65 Q108,74 86,65 Q64,56 42,65 Q20,74 0,65 Z" fill="rgba(196,200,208,0.3)"/>
+      <path d="M0,84 Q25,75 50,84 Q75,93 100,84 Q125,75 150,84 Q175,93 200,84 L200,94 Q175,103 150,94 Q125,85 100,94 Q75,103 50,94 Q25,85 0,94 Z" fill="rgba(192,196,204,0.25)"/>
+      <path d="M0,112 Q30,103 60,112 Q90,121 120,112 Q150,103 180,112 Q210,121 240,112 L240,122 Q210,131 180,122 Q150,113 120,122 Q90,131 60,122 Q30,113 0,122 Z" fill="rgba(190,194,202,0.2)"/>
+    </svg>`,
+  };
+  return svgs[theme]||null;
+}
+
 // AUTH & INIT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function sha256(s){
