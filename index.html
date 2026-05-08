@@ -2,282 +2,929 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>날씨 배경 미리보기</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인사팀 위클리 보고</title>
+<script>
+const FIREBASE_URL = 'https://sirloinhr-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FIXED_MEMBERS = ['류효인', '허원희', '김명진'];
+const LEAD_NAME = '류효인';
+const MAX_HIST = 10;
+</script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:#111112;padding:28px;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;}
-h2{color:rgba(255,255,255,.45);font-size:11px;letter-spacing:.14em;font-weight:500;margin-bottom:18px;text-transform:uppercase;}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:800px;}
-.card{border-radius:18px;overflow:hidden;position:relative;height:200px;box-shadow:0 8px 32px rgba(0,0,0,.5);}
-.em{position:absolute;top:13px;left:15px;font-size:19px;z-index:10;}
-.lbl{position:absolute;bottom:13px;left:15px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(0,0,0,.3);z-index:10;}
-svg.bg{position:absolute;inset:0;width:100%;height:100%;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#ffffff;--bg2:#f7f6f3;--bg3:#f0efe9;
+  --text:#1a1a18;--text2:#6b6a65;--text3:#9c9a92;
+  --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
+  --green:#1D9E75;--red:#A32D2D;--blue:#185FA5;
+  --blue-bg:#E6F1FB;--green-bg:#EAF3DE;--amber-bg:#FAEEDA;--coral-bg:#FAECE7;
+  --blue-t:#185FA5;--green-t:#3B6D11;--amber-t:#854F0B;--coral-t:#993C1D;
+  --warn-bg:#FAEEDA;--warn-bd:#EF9F27;--warn-t:#633806;
+  --r:8px;--rl:12px;
+  --bg3-override:#f0efe9;
+}
+html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:var(--bg3-override);color:var(--text);min-height:100vh;transition:background 1.2s ease;}
+/* ── WEATHER BACKGROUND ── */
+#wx-bg{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden;transition:opacity 1s ease;}
+.page{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:0 16px 60px;}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;position:relative;z-index:1;}
+.ptcl{position:absolute;pointer-events:none;animation:ptclFall linear infinite;}
+@keyframes ptclFall{0%{transform:translateY(-40px) translateX(0px) rotate(0deg);opacity:1;}
+  50%{transform:translateY(50vh) translateX(var(--sx,15px)) rotate(180deg);opacity:.8;}
+  100%{transform:translateY(110vh) translateX(0px) rotate(360deg);opacity:0;}}
+@keyframes ptclRain{0%{transform:translateY(-20px) skewX(-15deg);opacity:.7;}
+  100%{transform:translateY(110vh) skewX(-15deg);opacity:.3;}}
+@keyframes ptclFloat{0%,100%{transform:translateY(0) scaleX(1);}50%{transform:translateY(-8px) scaleX(1.1);}}
+/* ── WEATHER STRIP ── */
+.wx-strip{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--rl);background:rgba(255,255,255,0.6);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.8);flex-shrink:0;}
+.wx-emoji{font-size:20px;line-height:1;}
+.wx-info{display:flex;flex-direction:column;gap:1px;}
+.wx-temp{font-size:14px;font-weight:700;color:var(--text);}
+.wx-date{font-size:10px;color:var(--text2);}
+/* ── AUTH ── */
+.auth-logo{font-size:11px;font-weight:600;letter-spacing:0.18em;color:var(--text3);margin-bottom:28px;text-transform:uppercase;}
+.auth-card{background:rgba(255,255,255,0.9);backdrop-filter:blur(12px);border:0.5px solid rgba(255,255,255,0.9);border-radius:var(--rl);padding:28px 24px;width:100%;max-width:360px;}
+.auth-title{font-size:16px;font-weight:600;margin-bottom:6px;}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+.field-lbl{font-size:11px;color:var(--text2);margin-bottom:5px;}
+.field-inp{width:100%;font-size:14px;font-family:inherit;border:0.5px solid var(--border2);border-radius:var(--r);padding:9px 12px;background:var(--bg2);color:var(--text);margin-bottom:6px;}
+.field-inp:focus{outline:none;border-color:var(--text3);background:var(--bg);}
+.auth-btn{width:100%;background:var(--text);color:var(--bg);border:none;border-radius:var(--r);padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:8px;}
+.auth-btn:hover{opacity:0.85;}
+.auth-btn:disabled{opacity:0.38;cursor:not-allowed;}
+.auth-err{font-size:12px;color:var(--red);min-height:18px;}
+.auth-note{font-size:11px;color:var(--text3);margin-top:16px;padding-top:14px;border-top:0.5px solid var(--border);line-height:1.65;}
+/* ── WEEK BAR ── */
+.week-bar{background:rgba(255,255,255,0.7);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.9);border-radius:var(--rl);padding:10px 14px;margin-bottom:10px;}
+.week-bar-top{display:flex;align-items:center;gap:8px;}
+.week-bar select{flex:1;font-size:13px;font-family:inherit;background:none;border:none;color:var(--text);cursor:pointer;outline:none;}
+.wbadge{font-size:11px;border-radius:4px;padding:2px 8px;font-weight:600;flex-shrink:0;}
+.wbadge.now{background:var(--green-bg);color:var(--green-t);}
+.wbadge.next{background:var(--blue-bg);color:var(--blue-t);}
+.wbadge.past{background:var(--bg2);color:var(--text2);}
+.nw-btn{font-size:12px;background:var(--blue-t);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-family:inherit;font-weight:600;flex-shrink:0;white-space:nowrap;}
+.nw-btn:hover{opacity:0.85;}
+.wk-hint{font-size:11px;color:var(--blue-t);margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);display:none;}
+/* ── BANNERS ── */
+.banner{border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:12px;display:none;}
+.banner.readonly{background:var(--amber-bg);border:0.5px solid var(--warn-bd);color:var(--amber-t);}
+.banner.nextweek{background:var(--blue-bg);border:0.5px solid var(--blue-t);color:var(--blue-t);}
+/* ── APP HEADER ── */
+.app-header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px;gap:12px;}
+.app-title{font-size:18px;font-weight:700;}
+.app-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+.header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;}
+.save-st{font-size:11px;color:var(--text3);}
+.icon-btn{background:rgba(255,255,255,0.7);backdrop-filter:blur(4px);border:0.5px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer;font-family:inherit;}
+.icon-btn:hover{background:var(--bg2);}
+.save-btn{background:var(--text);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+.save-btn:hover{opacity:0.85;}
+.save-btn:disabled{opacity:0.38;cursor:not-allowed;}
+.refresh-btn{background:rgba(255,255,255,0.7);border:0.5px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text2);cursor:pointer;font-family:inherit;}
+.refresh-btn:hover{background:var(--bg2);}
+.hist-btn{background:rgba(255,255,255,0.7);border:0.5px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text2);cursor:pointer;font-family:inherit;}
+.hist-btn:hover{background:var(--bg2);}
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:0.5px solid var(--border);margin-bottom:20px;}
+.tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:14px;color:var(--text2);cursor:pointer;font-family:inherit;margin-bottom:-1px;}
+.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--text);}
+/* ── CARDS ── */
+.card{background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.9);border-radius:var(--rl);padding:18px;margin-bottom:12px;}
+.warn-card{border-color:var(--warn-bd);}
+.member-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+.name-label{flex:1;font-size:15px;font-weight:600;color:var(--text);}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0;}
+.dot.on{background:var(--green);}
+.sec-row{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+.sec-badge{font-size:11px;font-weight:600;background:var(--bg2);border:0.5px solid var(--border);border-radius:5px;padding:2px 7px;flex-shrink:0;}
+.sec-name{font-size:12px;font-weight:600;color:var(--text2);}
+.warn-badge{background:var(--warn-bg);border-color:var(--warn-bd);color:var(--warn-t);}
+.warn-name{color:var(--warn-t);}
+.col-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.col-lbl{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;}
+textarea{width:100%;font-size:13px;font-family:inherit;border:0.5px solid var(--border);border-radius:var(--r);padding:9px 11px;background:rgba(247,246,243,0.8);color:var(--text);resize:none;min-height:110px;line-height:1.75;overflow:hidden;}
+textarea:focus{outline:none;border-color:var(--border2);background:var(--bg);}
+textarea:disabled{opacity:0.6;cursor:not-allowed;}
+textarea.warn{border-color:var(--warn-bd);min-height:90px;}
+textarea.sm{min-height:90px;}
+.dv{height:0.5px;background:var(--border);margin:14px 0;}
+.row-end{display:flex;justify-content:flex-end;margin-top:16px;gap:8px;}
+.btn-p{background:var(--text);color:var(--bg);border:none;border-radius:var(--r);padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-p:hover{opacity:0.85;}
+.btn-s{background:rgba(255,255,255,0.7);border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 14px;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit;}
+.btn-s:hover{background:var(--bg2);}
+/* ── CEO VIEW ── */
+.sec-lbl{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;}
+.lead-card{background:rgba(255,255,255,0.9);border:1.5px solid var(--text);border-radius:var(--rl);padding:20px;margin-bottom:16px;}
+.lead-name{font-size:17px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.lead-badge{font-size:10px;background:var(--text);color:var(--bg);border-radius:4px;padding:2px 7px;font-weight:700;}
+.lead-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
+.lead-lbl{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;}
+.lead-val{font-size:13px;line-height:1.65;white-space:pre-wrap;}
+.team-section-lbl{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;margin-top:4px;}
+.team-card{background:rgba(247,246,243,0.8);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;}
+.team-name{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;}
+.team-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.team-lbl{font-size:10px;font-weight:600;color:var(--text3);margin-bottom:2px;}
+.team-val{font-size:11px;line-height:1.55;white-space:pre-wrap;color:var(--text2);}
+.tag-w{display:inline-block;font-size:10px;background:var(--coral-bg);color:var(--coral-t);border-radius:4px;padding:1px 6px;margin-top:3px;}
+.eh{color:var(--text3);font-size:13px;font-style:italic;}
+/* ── HISTORY TAB ── */
+.hw-card{background:rgba(255,255,255,0.85);border:0.5px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.hw-card:hover{border-color:var(--border2);}
+/* ── VERSION HISTORY PANEL ── */
+.ver-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.25);z-index:200;display:none;}
+.ver-overlay.open{display:block;}
+.ver-panel{position:fixed;top:0;right:0;height:100vh;width:300px;background:var(--bg);border-left:0.5px solid var(--border);z-index:201;transform:translateX(100%);transition:transform .3s ease;overflow-y:auto;display:flex;flex-direction:column;}
+.ver-panel.open{transform:translateX(0);}
+.ver-header{padding:20px 18px 14px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.ver-title{font-size:15px;font-weight:700;}
+.ver-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);padding:0;line-height:1;}
+.ver-body{padding:14px 18px;flex:1;overflow-y:auto;}
+.ver-item{padding:12px 14px;border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;}
+.ver-time{font-size:13px;font-weight:600;margin-bottom:2px;}
+.ver-ago{font-size:11px;color:var(--text3);margin-bottom:8px;}
+.ver-restore{font-size:12px;background:none;border:0.5px solid var(--border2);border-radius:5px;padding:4px 10px;cursor:pointer;font-family:inherit;color:var(--text2);}
+.ver-restore:hover{background:var(--bg2);}
+.ver-empty{font-size:13px;color:var(--text3);font-style:italic;padding:8px 0;}
+.ver-conflict{background:var(--amber-bg);border:0.5px solid var(--warn-bd);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--amber-t);display:none;}
+/* ── SETTINGS ── */
+.sr{display:flex;gap:8px;margin-top:10px;}
+.sr input{flex:1;font-size:13px;font-family:inherit;border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;background:var(--bg2);color:var(--text);}
+.sr input:focus{outline:none;border-color:var(--text3);}
+.sm2{font-size:11px;margin-top:4px;min-height:16px;}
+/* ── LOADING ── */
+.ld{display:flex;gap:5px;align-items:center;padding:4px 0;}
+.ldd{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:pulse 1.1s infinite;}
+.ldd:nth-child(2){animation-delay:.18s;}
+.ldd:nth-child(3){animation-delay:.36s;}
+@keyframes pulse{0%,80%,100%{transform:scale(.55)}40%{transform:scale(1)}}
 </style>
 </head>
 <body>
-<h2>Weather × Season Preview</h2>
-<div class="grid">
 
-<!-- 1. 봄 맑음 -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <radialGradient id="g1" cx="80%" cy="5%"><stop offset="0%" stop-color="#f0d0e4"/><stop offset="55%" stop-color="#eae0f2"/><stop offset="100%" stop-color="#e4eaf8"/></radialGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g1)"/>
-<!-- 태양 -->
-<g transform="translate(242,34)" opacity="0.3">
-  <circle r="18" fill="#FFD040"/>
-  <g stroke="#FFB800" stroke-width="2.2" stroke-linecap="round">
-    <line x1="0" y1="-22" x2="0" y2="-28"/><line x1="0" y1="22" x2="0" y2="28"/>
-    <line x1="-22" y1="0" x2="-28" y2="0"/><line x1="22" y1="0" x2="28" y2="0"/>
-    <line x1="-15.6" y1="-15.6" x2="-19.8" y2="-19.8"/><line x1="15.6" y1="15.6" x2="19.8" y2="19.8"/>
-    <line x1="15.6" y1="-15.6" x2="19.8" y2="-19.8"/><line x1="-15.6" y1="15.6" x2="-19.8" y2="19.8"/>
-  </g>
-</g>
-<!-- 벚꽃 가지 (우하단, 섬세하게) -->
-<g stroke="#c090a8" fill="none" stroke-linecap="round" opacity="0.18">
-  <path d="M285,200 Q265,175 252,152 Q238,128 234,108" stroke-width="4.5"/>
-  <path d="M252,152 Q262,136 268,122" stroke-width="3"/>
-  <path d="M244,140 Q238,124 234,110" stroke-width="2.5"/>
-  <path d="M234,108 Q226,92 222,80" stroke-width="2.5"/>
-  <path d="M234,108 Q244,93 246,80" stroke-width="2.2"/>
-  <path d="M268,122 Q274,110 278,98" stroke-width="2"/>
-</g>
-<g opacity="0.2">
-  <circle cx="222" cy="78" r="7" fill="#f4b8cc"/><circle cx="230" cy="72" r="5" fill="#f0aac0"/>
-  <circle cx="216" cy="72" r="6" fill="#f5c0d0"/><circle cx="246" cy="78" r="6" fill="#f2b0c8"/>
-  <circle cx="254" cy="72" r="5" fill="#f0a8be"/><circle cx="240" cy="72" r="6" fill="#f5b8cc"/>
-  <circle cx="278" cy="96" r="5" fill="#f0a8be"/><circle cx="284" cy="90" r="4" fill="#f4b5ca"/>
-  <circle cx="272" cy="90" r="5" fill="#f2b0c8"/>
-</g>
-<!-- 봄 나무 실루엣 -->
-<path d="M-5,183 C5,170 15,158 28,163 C36,167 42,157 52,150 C59,145 68,143 78,150 C85,155 91,149 100,143 C107,138 116,136 125,143 C132,148 138,142 147,136 C154,131 163,129 172,136 C179,141 185,135 194,129 C201,124 210,122 219,129 C226,134 232,128 241,122 C248,118 257,116 266,122 C272,126 278,120 285,115 L285,183 Z" fill="#c0a0b4" opacity="0.15"/>
-<path d="M-5,188 C8,178 18,168 32,173 C40,177 46,167 56,161 C63,157 72,155 81,161 C88,166 94,160 103,155 C110,150 119,148 128,155 C135,160 141,154 150,148 C157,143 166,141 175,148 C182,153 188,147 197,141 C204,136 213,134 222,141 C229,146 235,140 244,134 C251,130 260,128 268,134 L285,128 L285,188 Z" fill="#d4b0c8" opacity="0.1"/>
-</svg>
-<span class="em">🌸</span><span class="lbl">봄 맑음</span></div>
+<!-- 날씨 배경 레이어 -->
+<div id="wx-bg"></div>
 
-<!-- 2. 여름 맑음 -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <radialGradient id="g2" cx="78%" cy="4%"><stop offset="0%" stop-color="#90ccf4"/><stop offset="50%" stop-color="#b8e0f8"/><stop offset="100%" stop-color="#daf0ff"/></radialGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g2)"/>
-<!-- 밝은 태양 -->
-<g transform="translate(240,36)" opacity="0.35">
-  <circle r="22" fill="#FFD020"/>
-  <g stroke="#FFA800" stroke-width="2.8" stroke-linecap="round">
-    <line x1="0" y1="-27" x2="0" y2="-34"/><line x1="0" y1="27" x2="0" y2="34"/>
-    <line x1="-27" y1="0" x2="-34" y2="0"/><line x1="27" y1="0" x2="34" y2="0"/>
-    <line x1="-19" y1="-19" x2="-24" y2="-24"/><line x1="19" y1="19" x2="24" y2="24"/>
-    <line x1="19" y1="-19" x2="24" y2="-24"/><line x1="-19" y1="19" x2="-24" y2="24"/>
-  </g>
-</g>
-<!-- 여름 나무 실루엣 (풍성하게) -->
-<path d="M-5,183 C4,168 16,154 30,160 C38,164 44,153 56,146 C63,141 73,139 83,146 C90,151 96,145 106,139 C113,134 123,132 133,139 C140,144 146,138 156,132 C163,127 173,125 183,132 C190,137 196,131 206,125 C213,120 223,118 233,125 C240,130 246,124 256,118 C263,114 272,112 281,118 L285,122 L285,183 Z" fill="#3a6828" opacity="0.14"/>
-<path d="M-5,188 C8,176 20,164 34,170 C42,174 48,163 60,157 C67,153 77,151 86,157 C93,162 99,156 109,151 C116,146 126,144 136,151 C143,156 149,150 159,144 C166,139 176,137 186,144 C193,149 199,143 209,137 C216,132 226,130 236,137 C243,142 249,136 258,130 L285,126 L285,188 Z" fill="#4a7830" opacity="0.1"/>
-</svg>
-<span class="em">☀️</span><span class="lbl">여름 맑음</span></div>
-
-<!-- 3. 가을 맑음 -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <radialGradient id="g3" cx="78%" cy="4%"><stop offset="0%" stop-color="#f0c068"/><stop offset="50%" stop-color="#f5d898"/><stop offset="100%" stop-color="#f8edd8"/></radialGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g3)"/>
-<!-- 태양 (맑음은 계절 무관 동일) -->
-<g transform="translate(242,34)" opacity="0.3">
-  <circle r="19" fill="#FFD040"/>
-  <g stroke="#FFB800" stroke-width="2.2" stroke-linecap="round">
-    <line x1="0" y1="-24" x2="0" y2="-30"/><line x1="0" y1="24" x2="0" y2="30"/>
-    <line x1="-24" y1="0" x2="-30" y2="0"/><line x1="24" y1="0" x2="30" y2="0"/>
-    <line x1="-17" y1="-17" x2="-21.5" y2="-21.5"/><line x1="17" y1="17" x2="21.5" y2="21.5"/>
-    <line x1="17" y1="-17" x2="21.5" y2="-21.5"/><line x1="-17" y1="17" x2="-21.5" y2="21.5"/>
-  </g>
-</g>
-<!-- 단풍잎 (우하단 섬세하게) -->
-<g opacity="0.18" fill="#a04010">
-  <path d="M248,185 Q244,168 248,152 Q252,136 244,120 Q240,110 248,102 Q256,110 252,120 Q260,126 268,120 Q264,134 256,138 Q266,148 264,162 Q256,168 252,180 Z"/>
-  <path d="M268,192 Q265,178 268,164 Q272,152 266,140 Q276,146 274,158 Q282,162 280,174 Z" transform="rotate(-15,268,192)"/>
-  <path d="M232,196 Q228,182 232,168 Q236,156 230,146 Q238,150 236,162 Q244,165 242,176 Z" transform="rotate(12,232,196)"/>
-</g>
-<!-- 가을 나무 실루엣 -->
-<path d="M-5,183 C6,173 14,163 24,160 C31,157 38,150 48,144 C55,139 64,137 74,143 C81,148 87,142 95,136 C102,131 111,129 120,135 C127,140 133,134 141,128 C148,123 157,121 165,127 C172,132 178,126 186,121 C193,117 202,115 210,121 C217,126 223,120 231,115 C238,111 247,109 256,115 C262,119 268,113 276,108 L285,112 L285,183 Z" fill="#904820" opacity="0.15"/>
-<path d="M-5,188 C7,180 16,170 27,167 C34,165 41,158 51,153 C58,149 67,147 76,153 C83,158 89,152 97,147 C104,142 113,140 122,147 C129,152 135,146 143,140 C150,136 159,134 167,140 C174,145 180,139 188,134 C195,130 204,128 212,134 L285,120 L285,188 Z" fill="#a85830" opacity="0.1"/>
-</svg>
-<span class="em">🍂</span><span class="lbl">가을 맑음</span></div>
-
-<!-- 4. 겨울 맑음 -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <radialGradient id="g4" cx="78%" cy="4%"><stop offset="0%" stop-color="#98c4e8"/><stop offset="50%" stop-color="#c0d8f2"/><stop offset="100%" stop-color="#e4f0fc"/></radialGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g4)"/>
-<!-- 태양 (맑음은 계절 무관 동일) -->
-<g transform="translate(242,34)" opacity="0.3">
-  <circle r="19" fill="#FFD040"/>
-  <g stroke="#FFB800" stroke-width="2.2" stroke-linecap="round">
-    <line x1="0" y1="-23" x2="0" y2="-29"/><line x1="0" y1="23" x2="0" y2="29"/>
-    <line x1="-23" y1="0" x2="-29" y2="0"/><line x1="23" y1="0" x2="29" y2="0"/>
-    <line x1="-16" y1="-16" x2="-20.5" y2="-20.5"/><line x1="16" y1="16" x2="20.5" y2="20.5"/>
-    <line x1="16" y1="-16" x2="20.5" y2="-20.5"/><line x1="-16" y1="16" x2="-20.5" y2="20.5"/>
-  </g>
-</g>
-<!-- 눈결정 (선세하게) -->
-<g stroke="#a8c8e8" stroke-linecap="round" opacity="0.22">
-  <line x1="38" y1="58" x2="38" y2="74" stroke-width="2"/>
-  <line x1="30" y1="66" x2="46" y2="66" stroke-width="2"/>
-  <line x1="32.7" y1="60.7" x2="43.3" y2="71.3" stroke-width="2"/>
-  <line x1="32.7" y1="71.3" x2="43.3" y2="60.7" stroke-width="2"/>
-  <line x1="30" y1="65" x2="26" y2="62" stroke-width="1.5"/><line x1="46" y1="65" x2="50" y2="68" stroke-width="1.5"/>
-  <line x1="110" y1="45" x2="110" y2="57" stroke-width="1.8"/>
-  <line x1="104" y1="51" x2="116" y2="51" stroke-width="1.8"/>
-  <line x1="106.3" y1="47.3" x2="113.7" y2="54.7" stroke-width="1.8"/>
-  <line x1="106.3" y1="54.7" x2="113.7" y2="47.3" stroke-width="1.8"/>
-  <line x1="170" y1="68" x2="170" y2="80" stroke-width="1.6"/>
-  <line x1="164" y1="74" x2="176" y2="74" stroke-width="1.6"/>
-  <line x1="166.2" y1="70.2" x2="173.8" y2="77.8" stroke-width="1.6"/>
-  <line x1="166.2" y1="77.8" x2="173.8" y2="70.2" stroke-width="1.6"/>
-</g>
-<!-- 겨울 소나무 실루엣 -->
-<path d="M-5,183 L-5,158 L2,140 L8,155 L14,146 L20,126 L26,146 L32,155 L39,142 L45,122 L51,142 L57,152 L64,140 L70,119 L76,140 L82,149 L89,137 L95,116 L101,137 L107,146 L114,134 L120,113 L126,134 L132,143 L139,131 L145,110 L151,131 L157,140 L164,128 L170,108 L176,128 L182,137 L189,125 L195,105 L201,125 L207,134 L214,122 L220,102 L226,122 L232,131 L239,119 L245,99 L251,119 L257,128 L264,116 L270,96 L276,116 L282,125 L285,116 L285,183 Z" fill="#384830" opacity="0.14"/>
-<!-- 눈 쌓임 -->
-<path d="M-5,163 C5,158 14,160 22,157 C28,155 34,161 42,158 C48,156 54,162 62,159 C68,157 74,163 82,160 C88,158 94,164 102,162 C108,160 114,165 122,163 C128,161 134,166 142,164 C148,162 154,167 162,165 C168,163 174,168 182,166 L285,155 L285,168 Z" fill="white" opacity="0.18"/>
-</svg>
-<span class="em">❄️</span><span class="lbl">겨울 맑음</span></div>
-
-<!-- 5. 비 (가을) -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <linearGradient id="g5" x1="0%" y1="0%" x2="30%" y2="100%"><stop offset="0%" stop-color="#a8b8cc"/><stop offset="60%" stop-color="#c0ccd8"/><stop offset="100%" stop-color="#d4dce6"/></linearGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g5)"/>
-<!-- 비구름 -->
-<g transform="translate(198,42)" opacity="0.3">
-  <path d="M-78,24 C-84,24 -90,18 -90,10 C-90,2 -84,-4 -76,-5 C-74,-18 -62,-27 -48,-27 C-34,-27 -22,-18 -20,-5 C-12,-8 -4,-3 -2,7 C0,17 -8,25 -18,25 Z" fill="#7090b0"/>
-  <g stroke="#6080a0" stroke-width="2" stroke-linecap="round">
-    <line x1="-70" y1="34" x2="-63" y2="52"/>
-    <line x1="-50" y1="32" x2="-43" y2="50"/>
-    <line x1="-30" y1="34" x2="-23" y2="52"/>
-    <line x1="-10" y1="32" x2="-3" y2="50"/>
-  </g>
-</g>
-<!-- 빗방울 (가는 선) -->
-<g stroke="#8090a8" stroke-width="1.2" stroke-linecap="round" opacity="0.18">
-  <line x1="30" y1="60" x2="22" y2="88"/><line x1="60" y1="50" x2="52" y2="78"/>
-  <line x1="90" y1="65" x2="82" y2="93"/><line x1="120" y1="55" x2="112" y2="83"/>
-  <line x1="150" y1="68" x2="142" y2="96"/><line x1="45" y1="90" x2="37" y2="118"/>
-  <line x1="75" y1="80" x2="67" y2="108"/><line x1="105" y1="95" x2="97" y2="123"/>
-  <line x1="135" y1="85" x2="127" y2="113"/>
-</g>
-<!-- 가을 나무 실루엣 (어둡게) -->
-<path d="M-5,183 C6,173 14,163 24,160 C31,157 38,150 48,144 C55,139 64,137 74,143 C81,148 87,142 95,136 C102,131 111,129 120,135 C127,140 133,134 141,128 C148,123 157,121 165,127 C172,132 178,126 186,121 C193,117 202,115 210,121 C217,126 223,120 231,115 C238,111 247,109 256,115 C262,119 268,113 276,108 L285,112 L285,183 Z" fill="#684018" opacity="0.12"/>
-<!-- 우산 (우하단 섬세하게) -->
-<g transform="translate(228,130)" opacity="0.28">
-  <path d="M-38,0 Q-38,-48 0,-52 Q38,-48 38,0 Z" fill="#6090c8"/>
-  <path d="M-38,0 Q-28,-10 -19,0 Q-9,10 0,0 Q9,-10 19,0 Q28,10 38,0" fill="#5080b8"/>
-  <g stroke="#4070a0" stroke-width="1.2" opacity="0.5">
-    <line x1="0" y1="0" x2="-38" y2="0"/><line x1="0" y1="0" x2="-22" y2="-38"/>
-    <line x1="0" y1="0" x2="0" y2="-52"/><line x1="0" y1="0" x2="22" y2="-38"/>
-    <line x1="0" y1="0" x2="38" y2="0"/>
-  </g>
-  <line x1="0" y1="0" x2="0" y2="48" stroke="#3a6098" stroke-width="4" stroke-linecap="round"/>
-  <path d="M0,48 Q0,62 10,62 Q20,62 20,52" stroke="#3a6098" stroke-width="4" fill="none" stroke-linecap="round"/>
-</g>
-</svg>
-<span class="em">🌧️</span><span class="lbl">비 (가을)</span></div>
-
-<!-- 6. 눈 (겨울) -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <radialGradient id="g6" cx="50%" cy="0%"><stop offset="0%" stop-color="#a8c4e0"/><stop offset="55%" stop-color="#c8daf0"/><stop offset="100%" stop-color="#e4eef8"/></radialGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g6)"/>
-<!-- 눈구름 -->
-<g transform="translate(180,38)" opacity="0.26">
-  <path d="M-72,26 C-78,26 -84,20 -84,12 C-84,4 -78,-2 -70,-3 C-68,-15 -56,-24 -42,-24 C-28,-24 -16,-15 -14,-3 C-6,-6 2,-1 2,9 C2,19 -6,27 -16,27 Z" fill="#a0b8d0"/>
-</g>
-<!-- 소나무 실루엣 -->
-<path d="M-5,183 L-5,158 L2,140 L8,155 L14,146 L20,126 L26,146 L32,155 L39,142 L45,122 L51,142 L57,152 L64,140 L70,119 L76,140 L82,149 L89,137 L95,116 L101,137 L107,146 L114,134 L120,113 L126,134 L132,143 L139,131 L145,110 L151,131 L157,140 L164,128 L170,108 L176,128 L182,137 L189,125 L195,105 L201,125 L207,134 L214,122 L220,102 L226,122 L232,131 L239,119 L245,99 L251,119 L257,128 L264,116 L270,96 L276,116 L282,125 L285,116 L285,183 Z" fill="#2c3c28" opacity="0.12"/>
-<!-- 눈 쌓임 -->
-<path d="M-5,162 C8,157 17,159 26,157 C32,155 38,160 47,158 C53,156 60,161 68,159 C74,157 80,162 89,160 C95,158 101,162 110,161 C116,159 122,163 131,162 C137,160 143,164 152,163 C158,161 164,165 173,164 C179,162 185,166 194,165 L285,155 L285,167 Z" fill="white" opacity="0.2"/>
-<!-- 눈사람 (미니멀, 선만) -->
-<g transform="translate(236,145)" stroke="#a0c0e0" stroke-width="1.8" fill="none" opacity="0.28">
-  <circle r="22" cy="17"/>
-  <circle r="15" cy="-13"/>
-  <circle r="10" cy="-36"/>
-  <line x1="-3" y1="-39" x2="-3" y2="-39" stroke-width="3" stroke-linecap="round"/>
-  <line x1="3" y1="-39" x2="3" y2="-39" stroke-width="3" stroke-linecap="round"/>
-  <path d="M-6,-26 Q0,-23 6,-26" stroke-width="1.5"/>
-</g>
-<!-- 눈결정 3개 -->
-<g stroke="#b0d0ee" stroke-linecap="round" opacity="0.25">
-  <line x1="35" y1="58" x2="35" y2="72" stroke-width="2"/><line x1="28" y1="65" x2="42" y2="65" stroke-width="2"/>
-  <line x1="30.1" y1="60.1" x2="39.9" y2="69.9" stroke-width="2"/><line x1="30.1" y1="69.9" x2="39.9" y2="60.1" stroke-width="2"/>
-  <line x1="95" y1="48" x2="95" y2="60" stroke-width="1.8"/><line x1="89" y1="54" x2="101" y2="54" stroke-width="1.8"/>
-  <line x1="91.5" y1="50.5" x2="98.5" y2="57.5" stroke-width="1.8"/><line x1="91.5" y1="57.5" x2="98.5" y2="50.5" stroke-width="1.8"/>
-  <line x1="155" y1="65" x2="155" y2="75" stroke-width="1.6"/><line x1="150" y1="70" x2="160" y2="70" stroke-width="1.6"/>
-  <line x1="151.5" y1="66.5" x2="158.5" y2="73.5" stroke-width="1.6"/><line x1="151.5" y1="73.5" x2="158.5" y2="66.5" stroke-width="1.6"/>
-</g>
-</svg>
-<span class="em">🌨️</span><span class="lbl">눈 (겨울)</span></div>
-
-<!-- 7. 천둥 (여름) -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <linearGradient id="g7" x1="0%" y1="0%" x2="20%" y2="100%"><stop offset="0%" stop-color="#8878a8"/><stop offset="55%" stop-color="#a098bc"/><stop offset="100%" stop-color="#bcb4d0"/></linearGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g7)"/>
-<!-- 먹구름 -->
-<g transform="translate(190,52)" opacity="0.32">
-  <path d="M-92,32 C-100,32 -108,24 -108,14 C-108,4 -100,-4 -90,-4 C-88,-20 -74,-32 -56,-32 C-38,-32 -24,-20 -22,-4 C-12,-8 -2,-2 0,10 C2,22 -8,32 -20,32 Z" fill="#5054788"/>
-  <path d="M-92,32 C-100,32 -108,24 -108,14 C-108,4 -100,-4 -90,-4 C-88,-20 -74,-32 -56,-32 C-38,-32 -24,-20 -22,-4 C-12,-8 -2,-2 0,10 C2,22 -8,32 -20,32 Z" fill="#505478"/>
-</g>
-<!-- 번개 -->
-<g transform="translate(190,52)" opacity="0.5">
-  <polygon points="-20,40 -36,76 -22,76 -36,108 -4,64 -20,64 -6,40" fill="#ffe840"/>
-  <polygon points="-20,40 -36,76 -22,76 -36,108 -4,64 -20,64 -6,40" fill="none" stroke="#ffd000" stroke-width="1"/>
-</g>
-<!-- 여름 나무 실루엣 (어둡게) -->
-<path d="M-5,183 C4,168 16,154 30,160 C38,164 44,153 56,146 C63,141 73,139 83,146 C90,151 96,145 106,139 C113,134 123,132 133,139 C140,144 146,138 156,132 C163,127 173,125 183,132 C190,137 196,131 206,125 C213,120 223,118 233,125 C240,130 246,124 256,118 C263,114 272,112 281,118 L285,122 L285,183 Z" fill="#202c18" opacity="0.18"/>
-</svg>
-<span class="em">⛈️</span><span class="lbl">천둥 (여름)</span></div>
-
-<!-- 8. 흐림 (봄) -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <linearGradient id="g8" x1="0%" y1="0%" x2="25%" y2="100%"><stop offset="0%" stop-color="#b0b4c8"/><stop offset="55%" stop-color="#c4c8d8"/><stop offset="100%" stop-color="#d4d8e8"/></linearGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g8)"/>
-<!-- 구름들 -->
-<g opacity="0.3">
-  <path d="M262,56 C258,56 254,52 254,46 C254,40 258,36 263,36 C264,29 270,24 278,24 C286,24 292,29 293,36 C297,34 302,36 303,42 C304,48 300,53 295,54 Z" fill="#9098b0"/>
-  <path d="M58,46 C52,46 46,40 46,32 C46,24 52,18 60,18 C62,8 70,1 80,1 C90,1 98,8 100,18 C107,15 115,18 117,27 C119,36 113,44 105,46 Z" fill="#9898b0"/>
-  <path d="M185,34 C180,34 175,29 175,23 C175,17 180,13 186,13 C187,5 193,0 201,0 C209,0 215,5 217,13 C222,11 227,14 229,21 C231,28 226,34 219,35 Z" fill="#9090b0"/>
-</g>
-<!-- 봄 나무 실루엣 (흐리게) -->
-<path d="M-5,183 C5,170 15,158 28,163 C36,167 42,157 52,150 C59,145 68,143 78,150 C85,155 91,149 100,143 C107,138 116,136 125,143 C132,148 138,142 147,136 C154,131 163,129 172,136 C179,141 185,135 194,129 C201,124 210,122 219,129 C226,134 232,128 241,122 C248,118 257,116 266,122 C272,126 278,120 285,115 L285,183 Z" fill="#9880a0" opacity="0.12"/>
-</svg>
-<span class="em">☁️</span><span class="lbl">흐림 (봄)</span></div>
-
-<!-- 9. 안개 (겨울) -->
-<div class="card"><svg class="bg" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <linearGradient id="g9" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#b4b8c4"/><stop offset="50%" stop-color="#c4c8d2"/><stop offset="100%" stop-color="#d4d8e0"/></linearGradient>
-</defs>
-<rect width="280" height="200" fill="url(#g9)"/>
-<!-- 안개 띠 (우아한 웨이브) -->
-<g opacity="0.35" fill="rgba(220,224,232,0.45)" stroke="none">
-  <path d="M-5,60 C30,50 70,58 110,54 C150,50 190,57 230,52 C255,49 270,53 285,50 L285,65 C270,68 255,64 230,67 C190,72 150,65 110,69 C70,73 30,65 -5,75 Z"/>
-  <path d="M-5,88 C35,80 75,86 115,82 C155,78 195,85 235,80 C257,77 272,81 285,78 L285,93 C272,96 257,92 235,95 C195,100 155,93 115,97 C75,101 35,95 -5,103 Z" opacity="0.8"/>
-  <path d="M-5,115 C40,108 80,114 120,110 C160,106 200,113 240,108 C260,105 274,109 285,106 L285,121 C274,124 260,120 240,123 C200,128 160,121 120,125 C80,129 40,123 -5,131 Z" opacity="0.65"/>
-  <path d="M-5,140 C45,134 85,140 125,136 C165,132 205,138 245,134 C262,131 275,135 285,132 L285,147 C275,150 262,146 245,149 C205,154 165,147 125,151 C85,155 45,149 -5,157 Z" opacity="0.5"/>
-</g>
-<!-- 소나무 실루엣 (안개속, 매우 희미하게) -->
-<path d="M-5,183 L-5,160 L2,144 L8,158 L14,148 L20,130 L26,148 L32,158 L38,146 L44,128 L50,146 L56,156 L62,144 L68,125 L74,144 L80,153 L86,141 L92,122 L98,141 L104,150 L110,138 L116,119 L122,138 L128,148 L135,136 L141,116 L147,136 L153,145 L160,133 L166,114 L172,133 L178,142 L184,130 L190,111 L196,130 L202,139 L208,127 L214,108 L220,127 L226,136 L232,124 L238,105 L244,124 L250,133 L256,121 L262,102 L268,121 L274,130 L280,119 L285,108 L285,183 Z" fill="#3a4050" opacity="0.08"/>
-</svg>
-<span class="em">🌫️</span><span class="lbl">안개 (겨울)</span></div>
-
+<!-- LOCK -->
+<div id="sc-lock" class="center" style="display:none;">
+  <div class="auth-logo">HR Weekly</div>
+  <div class="auth-card">
+    <div class="auth-title">비밀번호 입력</div>
+    <div class="auth-sub">인사팀 위클리 보고 시스템입니다.</div>
+    <div class="field-lbl">비밀번호</div>
+    <input class="field-inp" type="password" id="lock-pw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')unlock();" autocomplete="current-password"/>
+    <div class="auth-err" id="lock-err"></div>
+    <button class="auth-btn" id="unlock-btn" onclick="unlock()">입장하기</button>
+    <div class="auth-note">이 링크와 비밀번호는 팀 내부에서만 공유해주세요.</div>
+  </div>
 </div>
+
+<!-- LOADING -->
+<div id="sc-loading" class="center" style="display:none;">
+  <div class="ld"><div class="ldd"></div><div class="ldd"></div><div class="ldd"></div></div>
+  <div style="font-size:13px;color:var(--text2);margin-top:12px;">불러오는 중...</div>
+</div>
+
+<!-- VERSION HISTORY PANEL -->
+<div class="ver-overlay" id="ver-overlay" onclick="closeVerPanel()"></div>
+<div class="ver-panel" id="ver-panel">
+  <div class="ver-header">
+    <div class="ver-title">⏱ 저장 기록</div>
+    <button class="ver-close" onclick="closeVerPanel()">×</button>
+  </div>
+  <div class="ver-body">
+    <div class="ver-conflict" id="ver-conflict">
+      ⚠️ 다른 사람이 저장한 내용이 있어요.<br>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="ver-restore" onclick="forceRefresh()" style="background:var(--amber-bg);border-color:var(--warn-bd);color:var(--amber-t);">최신 버전 불러오기</button>
+        <button class="ver-restore" onclick="closeVerPanel()">무시하고 계속</button>
+      </div>
+    </div>
+    <div id="ver-list"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="sc-app" style="display:none;">
+  <div class="page">
+    <div class="app-header">
+      <div>
+        <div class="app-title">인사팀 위클리 보고</div>
+        <div class="app-sub" id="wk-lbl"></div>
+      </div>
+      <div class="header-right">
+        <div class="wx-strip" id="wx-strip">
+          <div class="wx-emoji" id="wx-emoji">—</div>
+          <div class="wx-info">
+            <div class="wx-temp" id="wx-temp">—°C</div>
+            <div class="wx-date" id="wx-date"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 저장/새로고침/기록 버튼 -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <span class="save-st" id="sv-st" style="flex:1;"></span>
+      <button class="hist-btn" onclick="openVerPanel()">⏱ 저장 기록</button>
+      <button class="refresh-btn" onclick="doRefresh()">↻ 새로고침</button>
+      <button class="save-btn" id="save-btn" onclick="doSave()">저장</button>
+      <button class="icon-btn" onclick="doLock()">잠금</button>
+    </div>
+
+    <!-- 주차 선택 바 -->
+    <div class="week-bar">
+      <div class="week-bar-top">
+        <select id="week-sel" onchange="onWeekChange(this.value)"></select>
+        <span class="wbadge" id="wbadge">이번 주</span>
+        <button class="nw-btn" id="nw-btn" onclick="startNextWeek()" style="display:none;">다음 주 미리 작성</button>
+      </div>
+      <div class="wk-hint" id="wk-hint">목~일요일에 다음 주 보고서를 미리 작성할 수 있어요.</div>
+    </div>
+
+    <div class="banner readonly" id="ban-readonly">과거 주차는 읽기 전용입니다.</div>
+    <div class="banner nextweek" id="ban-next">다음 주 보고서를 미리 작성 중이에요.</div>
+
+    <div class="tabs">
+      <button class="tab on" id="t1" onclick="sw('input')">팀원 입력</button>
+      <button class="tab" id="t2" onclick="sw('ceo')">대표님 뷰</button>
+      <button class="tab" id="t3" onclick="sw('history')">히스토리</button>
+      <button class="tab" id="t4" onclick="sw('settings')">설정</button>
+    </div>
+
+    <!-- INPUT TAB -->
+    <div id="pg-input">
+      <div class="card warn-card">
+        <div class="sec-row" style="margin-bottom:8px;">
+          <span class="sec-badge warn-badge">★</span>
+          <span class="sec-name warn-name">대표님 지시 / 요청사항</span>
+        </div>
+        <textarea class="warn" id="ceo-in" placeholder="이번 주 위클리에서 받은 지시·요청사항..." oninput="markDirty()"></textarea>
+      </div>
+      <div id="mc"></div>
+      <div class="row-end">
+        <button class="btn-s" onclick="doSave()">저장</button>
+        <button class="btn-p" onclick="saveAndCeo()">저장하고 대표님 뷰로 →</button>
+      </div>
+    </div>
+
+    <!-- CEO TAB -->
+    <div id="pg-ceo" style="display:none;">
+      <div id="ceo-vw" style="margin-bottom:16px;display:none;">
+        <div class="sec-lbl">대표님 지시 / 요청사항</div>
+        <div style="background:var(--warn-bg);border:0.5px solid var(--warn-bd);border-radius:var(--r);padding:12px 14px;font-size:13px;line-height:1.7;" id="ceo-vt"></div>
+      </div>
+      <div class="sec-lbl">이번 주 보고</div>
+      <div id="lead-wrap"></div>
+      <div id="team-outer" style="display:none;">
+        <div class="team-section-lbl">팀원 보고</div>
+        <div id="team-wrap"></div>
+      </div>
+      <div class="dv"></div>
+      <div><div style="display:flex;justify-content:flex-end;"><button class="btn-s" onclick="cpAll(this)">전체 보고서 복사</button></div></div>
+    </div>
+
+    <!-- HISTORY TAB -->
+    <div id="pg-history" style="display:none;">
+      <div class="sec-lbl">주차별 기록</div>
+      <div id="hw-list"></div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div id="pg-settings" style="display:none;">
+      <div class="card">
+        <div class="sec-lbl">비밀번호 변경</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">변경 후 팀원들에게 새 비밀번호를 알려주세요.</div>
+        <div class="sr">
+          <input type="password" id="npw1" placeholder="새 비밀번호" autocomplete="new-password"/>
+          <input type="password" id="npw2" placeholder="확인" autocomplete="new-password"/>
+          <button class="btn-s" onclick="changePw()">변경</button>
+        </div>
+        <div class="sm2" id="cpw-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CATS=[{id:'rec',num:'1',name:'채용'},{id:'eval',num:'2',name:'평가·보상·급여'},{id:'etc',num:'3',name:'기타'}];
+const _D=[126,125,105,74,91,0,14,14,112];
+function _ck(pw){if(pw.length!==_D.length)return false;return[...pw].every((c,i)=>(c.charCodeAt(0)^(i*7+13))===_D[i]);}
+const avBg=['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
+const avFg=['#185FA5','#3B6D11','#854F0B','#993C1D'];
+
+let ms=[],ceo='',curKey='',allWeeks=[],isRO=false,isDirty=false,loadedAt=null;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// WEATHER
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const WX_EMOJIS={clear_spring:'🌸',clear_summer:'☀️',clear_autumn:'🍂',clear_winter:'❄️',cloudy:'☁️',rain:'🌧️',snow:'🌨️',thunder:'⛈️',fog:'🌫️'};
+
+function getSeason(m){if(m>=3&&m<=5)return'spring';if(m>=6&&m<=8)return'summer';if(m>=9&&m<=11)return'autumn';return'winter';}
+function getCondition(code){
+  if(code<=1)return'clear';if(code<=3)return'cloudy';
+  if(code<=48)return'fog';if(code<=67||code<=82)return'rain';
+  if(code<=77||code<=86)return'snow';if(code>=95)return'thunder';
+  return'cloudy';
+}
+
+async function fetchWeather(){
+  // 날짜 표시
+  const now=new Date();
+  const days=['일','월','화','수','목','금','토'];
+  document.getElementById('wx-date').textContent=
+    `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} (${days[now.getDay()]})`;
+  try{
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia/Seoul');
+    if(!r.ok)return;
+    const d=await r.json();
+    const temp=Math.round(d.current.temperature_2m);
+    const code=d.current.weather_code;
+    const season=getSeason(now.getMonth()+1);
+    const cond=getCondition(code);
+    const key=cond==='clear'?`clear_${season}`:cond;
+    const emoji=WX_EMOJIS[key]||'🌤️';
+    document.getElementById('wx-emoji').textContent=emoji;
+    document.getElementById('wx-temp').textContent=`${temp}°C`;
+    applyWeatherBg(cond,season);
+  }catch{applyWeatherBg('clear',getSeason(new Date().getMonth()+1));}
+}
+
+function applyWeatherBg(cond,season){
+  const bg=document.getElementById('wx-bg');
+  bg.innerHTML='';
+  // 배경색 설정
+  const bgColors={
+    spring:'#fce8f2',summer:'#ddeeff',autumn:'#fae8d4',winter:'#dce8f5',
+    rain:'#d8dfe8',snow:'#e8f0f8',fog:'#e0e2e8',cloudy:'#dde0e8',thunder:'#d0d0da'
+  };
+  const theme=(['rain','snow','fog','cloudy','thunder'].includes(cond))?cond:season;
+  document.documentElement.style.setProperty('--bg3-override',bgColors[theme]||'#f0efe9');
+
+  // 파티클 생성
+  const configs={
+    spring:{count:18,cls:'petal',colors:['#ffb7c5','#ff9eb5','#ffd0dd','#ff85a1'],w:8,h:6,rot:true,sway:true},
+    autumn:{count:14,cls:'leaf',colors:['#e8621a','#d4420a','#f0821a','#c84808','#e89030'],w:12,h:9,rot:true,sway:true},
+    winter:{count:22,cls:'snow',colors:['rgba(255,255,255,0.9)','rgba(220,235,255,0.8)'],w:5,h:5,rot:false,sway:false},
+    snow:{count:25,cls:'snow',colors:['rgba(255,255,255,0.9)','rgba(200,220,255,0.8)'],w:6,h:6,rot:false,sway:false},
+    rain:{count:35,cls:'rain',colors:['rgba(100,140,190,0.4)'],w:2,h:16,rot:false,sway:false},
+    summer:{count:0},fog:{count:0},cloudy:{count:0},thunder:{count:0}
+  };
+  const cfg=configs[theme]||{count:0};
+  if(!cfg.count)return;
+
+  for(let i=0;i<cfg.count;i++){
+    const el=document.createElement('div');
+    el.className='ptcl';
+    const color=cfg.colors[Math.floor(Math.random()*cfg.colors.length)];
+    const left=Math.random()*105;
+    const delay=Math.random()*8;
+    const dur=cfg.cls==='rain'?(0.6+Math.random()*0.4):(4+Math.random()*6);
+    const size=0.7+Math.random()*0.6;
+    const sway=cfg.sway?(Math.random()*30-15)+'px':'0px';
+
+    el.style.cssText=`
+      left:${left}vw;
+      animation-delay:-${delay}s;
+      animation-duration:${dur}s;
+      --sx:${sway};
+      width:${cfg.w*size}px;height:${cfg.h*size}px;
+      border-radius:${cfg.cls==='petal'?'60% 40% 50% 50%':cfg.cls==='leaf'?'50% 20%':'50%'};
+      background:${color};
+      ${cfg.cls==='rain'?'animation-name:ptclRain;border-radius:2px;':''}
+    `;
+    if(cfg.cls==='petal'||cfg.cls==='leaf'){
+      el.style.transform=`rotate(${Math.random()*360}deg)`;
+    }
+    bg.appendChild(el);
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// AUTH & INIT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function sha256(s){
+  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+'_wk25'));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+  catch{return btoa(s+'_wk25');}
+}
+function show(id){['sc-lock','sc-loading','sc-app'].forEach(s=>document.getElementById(s).style.display=s===id?'block':'none');}
+
+function init(){
+  show('sc-lock');
+  document.getElementById('lock-pw').focus();
+  fetchWeather();
+}
+
+async function unlock(){
+  const pw=document.getElementById('lock-pw').value;
+  const err=document.getElementById('lock-err');
+  const btn=document.getElementById('unlock-btn');
+  if(!pw){err.textContent='비밀번호를 입력해주세요.';return;}
+  btn.disabled=true;btn.textContent='확인 중...';err.textContent='';
+  let ok=false;
+  try{const r=await fetch(authPath());if(r.ok){const d=await r.json();if(d&&d.hash){const h=await sha256(pw);ok=(h===d.hash);}}}catch{}
+  if(!ok)ok=_ck(pw);
+  if(ok){await loadAndShow();}
+  else{err.textContent='비밀번호가 올바르지 않습니다.';document.getElementById('lock-pw').value='';document.getElementById('lock-pw').focus();}
+  btn.disabled=false;btn.textContent='입장하기';
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FIREBASE PATHS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function dbPath(k){return FIREBASE_URL.replace(/\/$/,'')+'/weeks/'+k+'.json';}
+function authPath(){return FIREBASE_URL.replace(/\/$/,'')+'/weekly_auth.json';}
+function weeksPath(){return FIREBASE_URL.replace(/\/$/,'')+'/weeks.json';}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// WEEK KEY UTILS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getWeekKey(offset){
+  const d=new Date();if(offset)d.setDate(d.getDate()+offset*7);
+  const day=d.getDay()||7;const mon=new Date(d);mon.setDate(d.getDate()-day+1);
+  const yr=mon.getFullYear();const jan1=new Date(yr,0,1);
+  const wn=Math.ceil(((mon-jan1)/86400000+(jan1.getDay()||7)-1)/7)+1;
+  return `${yr}_W${String(wn).padStart(2,'0')}`;
+}
+function getNextWeekKey(){return getWeekKey(1);}
+function thisWeekKey(){return getWeekKey(0);}
+
+function weekKeyToLabel(key){
+  const [yr,wPart]=key.split('_');const wn=parseInt(wPart.replace('W',''));
+  const jan1=new Date(parseInt(yr),0,1);const firstMon=new Date(jan1);
+  firstMon.setDate(jan1.getDate()+((8-(jan1.getDay()||7))%7||7)-7);
+  const mon=new Date(firstMon);mon.setDate(firstMon.getDate()+(wn-1)*7);
+  const fri=new Date(mon);fri.setDate(mon.getDate()+4);
+  const f=x=>`${x.getMonth()+1}/${x.getDate()}`;
+  return `${mon.getFullYear()}년 ${mon.getMonth()+1}월 ${Math.ceil(mon.getDate()/7)}주차 (${f(mon)} ~ ${f(fri)})`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DATA LOAD / SAVE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function dfltMs(){
+  return FIXED_MEMBERS.map((name,i)=>{
+    const m={id:i+1,name};CATS.forEach(c=>{m[`t_${c.id}`]='';m[`n_${c.id}`]='';});m.notes='';return m;
+  });
+}
+function mkM(id,name){const m={id,name};CATS.forEach(c=>{m[`t_${c.id}`]='';m[`n_${c.id}`]='';});m.notes='';return m;}
+function hasCont(m){return CATS.some(c=>m[`t_${c.id}`]||m[`n_${c.id}`])||m.notes;}
+
+async function loadAndShow(){
+  show('sc-loading');
+  const today=thisWeekKey(),next=getNextWeekKey();
+  try{const r=await fetch(weeksPath());if(r.ok){const d=await r.json();allWeeks=d?Object.keys(d).sort().reverse():[]; }}catch{allWeeks=[];}
+  let defaultKey=today;
+  if(allWeeks.includes(next)&&!allWeeks.includes(today))defaultKey=next;
+  const isNew=!allWeeks.includes(today)&&defaultKey===today;
+  if(!allWeeks.includes(defaultKey))allWeeks.unshift(defaultKey);
+  curKey=defaultKey;
+  if(isNew){await carryOverFromLastWeek();}
+  else{await loadWeek(curKey);}
+  buildSelector();
+  show('sc-app');
+}
+
+async function loadWeek(key){
+  try{
+    const r=await fetch(dbPath(key));
+    if(r.ok){
+      const d=await r.json();
+      if(d){
+        const saved=d.members||[];
+        ms=FIXED_MEMBERS.map((name,i)=>{
+          const found=saved.find(m=>m.name===name)||mkM(i+1,name);
+          found.id=i+1;found.name=name;return found;
+        });
+        ceo=d.ceo||'';
+        loadedAt=d.updated||null;
+      }else{ms=dfltMs();ceo='';loadedAt=null;}
+    }else{ms=dfltMs();ceo='';loadedAt=null;}
+  }catch{ms=dfltMs();ceo='';loadedAt=null;}
+  isDirty=false;
+  document.getElementById('ceo-in').value=ceo;
+  document.getElementById('wk-lbl').textContent=weekKeyToLabel(key);
+  render();setSt('');
+}
+
+async function carryOverFromLastWeek(){
+  const newMs=dfltMs();
+  const prevKey=[...allWeeks].filter(k=>k!==curKey).sort().reverse()[0];
+  let carried=false;
+  if(prevKey){
+    try{
+      const r=await fetch(dbPath(prevKey));
+      if(r.ok){const d=await r.json();
+        if(d&&d.members){
+          FIXED_MEMBERS.forEach((name,i)=>{
+            const prev=d.members.find(m=>m.name===name);
+            if(prev){CATS.forEach(cat=>{newMs[i][`t_${cat.id}`]=prev[`n_${cat.id}`]||'';newMs[i][`n_${cat.id}`]='';});newMs[i].notes='';carried=true;}
+          });
+        }
+      }
+    }catch{}
+  }
+  ms=newMs;ceo='';isDirty=false;loadedAt=null;
+  await fetch(dbPath(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(curKey),history:[]})});
+  document.getElementById('ceo-in').value='';
+  document.getElementById('wk-lbl').textContent=weekKeyToLabel(curKey);
+  render();
+  if(carried){setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓');setTimeout(()=>setSt(''),4000);}
+}
+
+// 저장 (충돌 감지 포함)
+async function doSave(skipConflict){
+  if(isRO)return;
+  collectValues();
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true;setSt('저장 중...');
+  // 충돌 감지
+  if(!skipConflict){
+    try{
+      const r=await fetch(dbPath(curKey));
+      if(r.ok){
+        const d=await r.json();
+        if(d&&d.updated&&loadedAt&&d.updated>loadedAt){
+          btn.disabled=false;setSt('⚠️ 충돌 감지');
+          document.getElementById('ver-conflict').style.display='block';
+          openVerPanel();
+          return;
+        }
+      }
+    }catch{}
+  }
+  document.getElementById('ver-conflict').style.display='none';
+  // 버전 히스토리 관리
+  let history=[];
+  try{
+    const r=await fetch(dbPath(curKey));
+    if(r.ok){const d=await r.json();history=(d&&d.history)||[];}
+  }catch{}
+  history.unshift({saved:new Date().toISOString(),ceo,members:JSON.parse(JSON.stringify(ms))});
+  if(history.length>MAX_HIST)history=history.slice(0,MAX_HIST);
+  const now=new Date().toISOString();
+  try{
+    const r=await fetch(dbPath(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({members:ms,ceo,updated:now,weekLabel:weekKeyToLabel(curKey),history})});
+    if(r.ok){loadedAt=now;isDirty=false;setSt('저장 완료 ✓');setTimeout(()=>setSt(''),3000);}
+    else setSt('저장 실패');
+  }catch{setSt('오프라인 — 저장 실패');}
+  btn.disabled=isRO;
+}
+
+function saveAndCeo(){doSave().then(()=>sw('ceo'));}
+
+async function forceRefresh(){
+  document.getElementById('ver-conflict').style.display='none';
+  closeVerPanel();
+  show('sc-loading');
+  await loadWeek(curKey);
+  buildSelector();
+  document.getElementById('week-sel').value=curKey;
+  updateUI(curKey);
+  show('sc-app');
+  setSt('최신 버전으로 새로고침됐어요');setTimeout(()=>setSt(''),3000);
+}
+
+async function doRefresh(){
+  if(isDirty){const ok=confirm('저장하지 않은 내용이 있습니다. 새로고침하면 사라져요. 계속할까요?');if(!ok)return;}
+  show('sc-loading');
+  await loadWeek(curKey);buildSelector();
+  document.getElementById('week-sel').value=curKey;updateUI(curKey);
+  show('sc-app');setSt('새로고침 완료');setTimeout(()=>setSt(''),2000);
+}
+
+function markDirty(){isDirty=true;setSt('미저장 변경사항 있음');}
+function setSt(s){const el=document.getElementById('sv-st');if(el)el.textContent=s;}
+
+function collectValues(){
+  ceo=document.getElementById('ceo-in').value;
+  ms.forEach(m=>{
+    CATS.forEach(cat=>{
+      const tw=document.getElementById(`ta_t_${cat.id}_${m.id}`);
+      const nw=document.getElementById(`ta_n_${cat.id}_${m.id}`);
+      const nt=document.getElementById(`ta_notes_${m.id}`);
+      if(tw)m[`t_${cat.id}`]=tw.value;
+      if(nw)m[`n_${cat.id}`]=nw.value;
+      if(nt)m.notes=nt.value;
+    });
+  });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// WEEK SELECTOR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function buildSelector(){
+  const sel=document.getElementById('week-sel');sel.innerHTML='';
+  const today=thisWeekKey(),next=getNextWeekKey();
+  [...new Set(allWeeks)].sort().reverse().forEach(k=>{
+    const opt=document.createElement('option');opt.value=k;
+    let label=weekKeyToLabel(k);
+    if(k===today)label+=' (이번 주)';else if(k===next)label+=' (다음 주)';
+    opt.textContent=label;sel.appendChild(opt);
+  });
+  sel.value=curKey;updateUI(curKey);
+}
+
+function updateUI(key){
+  const today=thisWeekKey(),next=getNextWeekKey();
+  isRO=(key!==today&&key!==next);
+  const isNext=(key===next&&key!==today);
+  const badge=document.getElementById('wbadge');
+  const nwBtn=document.getElementById('nw-btn');
+  const nwHint=document.getElementById('wk-hint');
+  const saveBtn=document.getElementById('save-btn');
+  if(key===today){badge.textContent='이번 주';badge.className='wbadge now';}
+  else if(key===next){badge.textContent='다음 주';badge.className='wbadge next';}
+  else{badge.textContent='과거';badge.className='wbadge past';}
+  const dow=new Date().getDay();
+  const isThuSun=(dow>=4||dow===0);
+  nwBtn.style.display=(isThuSun&&!allWeeks.includes(next)&&key===today)?'flex':'none';
+  nwHint.style.display=(isThuSun&&!allWeeks.includes(next)&&key===today)?'block':'none';
+  document.getElementById('ban-readonly').style.display=isRO?'block':'none';
+  document.getElementById('ban-next').style.display=isNext?'block':'none';
+  if(saveBtn)saveBtn.disabled=isRO;
+  setTimeout(()=>{document.querySelectorAll('#pg-input textarea').forEach(el=>el.disabled=isRO);},50);
+}
+
+async function onWeekChange(key){
+  if(isDirty){const ok=confirm('저장하지 않은 내용이 있습니다. 이동하시겠어요?');if(!ok){document.getElementById('week-sel').value=curKey;return;}}
+  show('sc-loading');curKey=key;
+  await loadWeek(key);updateUI(key);show('sc-app');
+  if(document.getElementById('t2').className.includes('on'))rCeo();
+}
+
+async function startNextWeek(){
+  const next=getNextWeekKey();
+  if(allWeeks.includes(next)){document.getElementById('week-sel').value=next;await onWeekChange(next);return;}
+  show('sc-loading');
+  const newMs=dfltMs();
+  try{
+    const r=await fetch(dbPath(curKey));
+    if(r.ok){const d=await r.json();
+      if(d&&d.members){
+        FIXED_MEMBERS.forEach((name,i)=>{
+          const prev=d.members.find(m=>m.name===name);
+          if(prev){CATS.forEach(cat=>{newMs[i][`t_${cat.id}`]=prev[`n_${cat.id}`]||'';newMs[i][`n_${cat.id}`]='';});newMs[i].notes='';}
+        });
+      }
+    }
+  }catch{}
+  curKey=next;ms=newMs;ceo='';isDirty=false;
+  allWeeks.unshift(next);
+  await fetch(dbPath(next),{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekKeyToLabel(next),history:[]})});
+  document.getElementById('ceo-in').value='';
+  document.getElementById('wk-lbl').textContent=weekKeyToLabel(next);
+  render();buildSelector();document.getElementById('week-sel').value=next;updateUI(next);show('sc-app');
+  setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓');setTimeout(()=>setSt(''),4000);
+}
+
+function doLock(){
+  if(isDirty){const ok=confirm('저장하지 않은 내용이 있습니다. 잠금하시겠어요?');if(!ok)return;}
+  show('sc-lock');document.getElementById('lock-pw').value='';document.getElementById('lock-err').textContent='';document.getElementById('lock-pw').focus();isDirty=false;
+}
+
+window.addEventListener('beforeunload',e=>{if(isDirty){e.preventDefault();e.returnValue='';}});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// RENDER
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function render(){
+  const c=document.getElementById('mc');c.innerHTML='';
+  ms.forEach(m=>{
+    const idx=ms.indexOf(m)%4,f=hasCont(m);
+    const div=document.createElement('div');div.className='card';
+    let h=`<div class="member-header">
+      <div class="avatar" style="background:${avBg[idx]};color:${avFg[idx]};">${(m.name||'?').charAt(0)}</div>
+      <span class="name-label">${m.name}</span>
+      <div class="dot${f?' on':''}" id="dot-${m.id}"></div>
+    </div>`;
+    CATS.forEach((cat,ci)=>{
+      h+=`<div style="margin-bottom:12px;">
+        <div class="sec-row"><span class="sec-badge">${cat.num}</span><span class="sec-name">${cat.name}</span></div>
+        <div class="col-grid">
+          <div><div class="col-lbl">한 일</div><textarea id="ta_t_${cat.id}_${m.id}" oninput="markDirty();updDot(${m.id})" ${isRO?'disabled':''}>${m[`t_${cat.id}`]}</textarea></div>
+          <div><div class="col-lbl">할 일</div><textarea id="ta_n_${cat.id}_${m.id}" oninput="markDirty();updDot(${m.id})" ${isRO?'disabled':''}>${m[`n_${cat.id}`]}</textarea></div>
+        </div>
+      </div>${ci<CATS.length-1?'<div class="dv"></div>':''}`;
+    });
+    h+=`<div class="dv"></div><div>
+      <div class="sec-row"><span class="sec-badge warn-badge">!</span><span class="sec-name warn-name">논의사항</span></div>
+      <textarea class="sm" id="ta_notes_${m.id}" oninput="markDirty();updDot(${m.id})" ${isRO?'disabled':''}>${m.notes}</textarea>
+    </div>`;
+    div.innerHTML=h;c.appendChild(div);
+  });
+  setTimeout(initAutoResize,50);
+}
+
+function updDot(id){
+  const keys=['rec','eval','etc'];
+  const f=keys.some(k=>document.getElementById(`ta_t_${k}_${id}`)?.value||document.getElementById(`ta_n_${k}_${id}`)?.value)||document.getElementById(`ta_notes_${id}`)?.value;
+  const dot=document.getElementById('dot-'+id);if(dot)dot.className='dot'+(f?' on':'');
+}
+function autoResize(el){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
+function initAutoResize(){document.querySelectorAll('textarea').forEach(el=>{autoResize(el);el.addEventListener('input',()=>autoResize(el));});}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TAB SWITCHING
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function sw(tab){
+  const map={input:1,ceo:2,history:3,settings:4};
+  ['input','ceo','history','settings'].forEach(t=>{
+    document.getElementById('pg-'+t).style.display=t===tab?'block':'none';
+    document.getElementById('t'+map[t]).className='tab'+(t===tab?' on':'');
+  });
+  if(tab==='ceo'){collectValues();rCeo();}
+  if(tab==='history')rHist();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CEO VIEW
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function rCeo(){
+  const cw=document.getElementById('ceo-vw'),ct=document.getElementById('ceo-vt');
+  if(ceo.trim()){cw.style.display='block';ct.textContent=ceo;}else cw.style.display='none';
+  const leadWrap=document.getElementById('lead-wrap');leadWrap.innerHTML='';
+  const lead=ms.find(m=>m.name===LEAD_NAME);
+  if(lead){
+    const d=document.createElement('div');d.className='lead-card';
+    let h=`<div class="lead-name">${lead.name}<span class="lead-badge">팀장</span></div>`;
+    CATS.forEach(cat=>{
+      const tw=lead[`t_${cat.id}`],nw=lead[`n_${cat.id}`];if(!tw&&!nw)return;
+      h+=`<div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px;">
+          <span class="sec-badge">${cat.num}</span><span class="sec-name">${cat.name}</span>
+        </div>
+        <div class="lead-grid">
+          <div><div class="lead-lbl">한 일</div><div class="lead-val">${tw||'—'}</div></div>
+          <div><div class="lead-lbl">할 일</div><div class="lead-val">${nw||'—'}</div></div>
+        </div>
+      </div>`;
+    });
+    if(lead.notes)h+=`<div style="padding-top:10px;border-top:0.5px solid var(--border);">
+      <span class="tag-w" style="font-size:11px;">논의사항</span>
+      <div class="lead-val" style="margin-top:6px;font-size:13px;">${lead.notes}</div></div>`;
+    if(!hasCont(lead))h+=`<div class="eh">아직 입력된 내용이 없습니다</div>`;
+    d.innerHTML=h;leadWrap.appendChild(d);
+  }
+  const teamWrap=document.getElementById('team-wrap');
+  const teamOuter=document.getElementById('team-outer');
+  teamWrap.innerHTML='';
+  const teamMs=ms.filter(m=>m.name!==LEAD_NAME);
+  teamOuter.style.display=teamMs.some(hasCont)?'block':'none';
+  teamMs.forEach(m=>{
+    if(!hasCont(m))return;
+    const d=document.createElement('div');d.className='team-card';
+    let h=`<div class="team-name">${m.name}</div>`;
+    CATS.forEach(cat=>{
+      const tw=m[`t_${cat.id}`],nw=m[`n_${cat.id}`];if(!tw&&!nw)return;
+      h+=`<div style="margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+          <span class="sec-badge" style="font-size:10px;padding:1px 5px;">${cat.num}</span>
+          <span style="font-size:10px;font-weight:600;color:var(--text3);">${cat.name}</span>
+        </div>
+        <div class="team-grid">
+          <div><div class="team-lbl">한 일</div><div class="team-val">${tw||'—'}</div></div>
+          <div><div class="team-lbl">할 일</div><div class="team-val">${nw||'—'}</div></div>
+        </div>
+      </div>`;
+    });
+    if(m.notes)h+=`<div style="padding-top:6px;border-top:0.5px solid var(--border);margin-top:4px;">
+      <span class="tag-w">논의사항</span><div class="team-val" style="margin-top:3px;">${m.notes}</div></div>`;
+    d.innerHTML=h;teamWrap.appendChild(d);
+  });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// VERSION HISTORY PANEL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function openVerPanel(){
+  document.getElementById('ver-panel').classList.add('open');
+  document.getElementById('ver-overlay').classList.add('open');
+  loadVerList();
+}
+function closeVerPanel(){
+  document.getElementById('ver-panel').classList.remove('open');
+  document.getElementById('ver-overlay').classList.remove('open');
+}
+
+async function loadVerList(){
+  const list=document.getElementById('ver-list');
+  list.innerHTML='<div class="ver-empty">불러오는 중...</div>';
+  try{
+    const r=await fetch(dbPath(curKey));
+    if(!r.ok){list.innerHTML='<div class="ver-empty">기록을 불러올 수 없어요.</div>';return;}
+    const d=await r.json();
+    const history=(d&&d.history)||[];
+    if(!history.length){list.innerHTML='<div class="ver-empty">아직 저장 기록이 없어요.</div>';return;}
+    list.innerHTML='';
+    history.forEach((v,i)=>{
+      const dt=new Date(v.saved);
+      const label=dt.toLocaleDateString('ko-KR',{month:'long',day:'numeric'})+' '+dt.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+      const ago=timeAgo(dt);
+      const item=document.createElement('div');item.className='ver-item';
+      item.innerHTML=`<div class="ver-time">${i===0?'🔵 최신 · ':''} ${label}</div>
+        <div class="ver-ago">${ago}</div>
+        ${i>0?`<button class="ver-restore" onclick="restoreVer(${i})">이 버전으로 복원</button>`:'<div style="font-size:11px;color:var(--text3);">현재 저장된 버전</div>'}`;
+      list.appendChild(item);
+    });
+  }catch{list.innerHTML='<div class="ver-empty">오류가 발생했어요.</div>';}
+}
+
+async function restoreVer(idx){
+  const ok=confirm(`이 버전으로 복원할까요? 현재 작성 중인 내용은 사라질 수 있어요.`);
+  if(!ok)return;
+  try{
+    const r=await fetch(dbPath(curKey));
+    if(!r.ok)return;
+    const d=await r.json();
+    const history=(d&&d.history)||[];
+    const v=history[idx];if(!v)return;
+    const saved=v.members||[];
+    ms=FIXED_MEMBERS.map((name,i)=>{
+      const found=saved.find(m=>m.name===name)||mkM(i+1,name);
+      found.id=i+1;found.name=name;return found;
+    });
+    ceo=v.ceo||'';
+    document.getElementById('ceo-in').value=ceo;
+    render();
+    closeVerPanel();
+    isDirty=true;
+    setSt('복원됐어요. 저장 버튼을 눌러 확정해주세요.');
+  }catch{alert('복원에 실패했어요.');}
+}
+
+function timeAgo(date){
+  const diff=Math.floor((Date.now()-date)/1000);
+  if(diff<60)return `${diff}초 전`;if(diff<3600)return `${Math.floor(diff/60)}분 전`;
+  if(diff<86400)return `${Math.floor(diff/3600)}시간 전`;return `${Math.floor(diff/86400)}일 전`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HISTORY TAB
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function rHist(){
+  const c=document.getElementById('hw-list');c.innerHTML='<div class="eh">불러오는 중...</div>';
+  try{
+    const r=await fetch(weeksPath());const all=r.ok?await r.json():{};
+    const sorted=Object.keys(all||{}).sort().reverse();c.innerHTML='';
+    if(!sorted.length){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
+    const today=thisWeekKey(),next=getNextWeekKey();
+    sorted.forEach(k=>{
+      const d=all[k]||{};const div=document.createElement('div');div.className='hw-card';
+      div.onclick=()=>{document.getElementById('week-sel').value=k;onWeekChange(k);sw('input');};
+      const mc=d.members?d.members.filter(m=>hasCont(m)).length:0;
+      const upd=d.updated?new Date(d.updated).toLocaleDateString('ko-KR'):'';
+      let tag='';
+      if(k===today)tag='<span class="wbadge now" style="font-size:10px;">이번 주</span>';
+      else if(k===next)tag='<span class="wbadge next" style="font-size:10px;">다음 주</span>';
+      div.innerHTML=`<div><div style="font-size:14px;font-weight:600;">${weekKeyToLabel(k)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px;">${mc}명 입력${upd?' · '+upd:''}</div></div>${tag}`;
+      c.appendChild(div);
+    });
+  }catch{c.innerHTML='<div class="eh">로드 실패</div>';}
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COPY ALL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function cpAll(btn){
+  collectValues();
+  let t=`📋 ${weekKeyToLabel(curKey)} 인사팀 위클리 보고\n\n`;
+  if(ceo.trim())t+=`[대표님 지시/요청사항]\n${ceo}\n\n`;
+  ms.forEach(m=>{
+    t+=`▪ ${m.name}\n`;
+    CATS.forEach(cat=>{t+=`${cat.num}. ${cat.name}\n  한 일: ${m[`t_${cat.id}`]||'없음'}\n  할 일: ${m[`n_${cat.id}`]||'없음'}\n`;});
+    if(m.notes)t+=`▶ 논의사항: ${m.notes}\n`;
+    t+='\n';
+  });
+  navigator.clipboard.writeText(t).then(()=>{const o=btn.textContent;btn.textContent='복사됨!';setTimeout(()=>btn.textContent=o,1500);});
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SETTINGS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function changePw(){
+  const p1=document.getElementById('npw1').value,p2=document.getElementById('npw2').value;
+  const msg=document.getElementById('cpw-msg');
+  if(!p1||p1.length<4){msg.style.color='var(--red)';msg.textContent='4자 이상 입력해주세요.';return;}
+  if(p1!==p2){msg.style.color='var(--red)';msg.textContent='비밀번호가 일치하지 않습니다.';return;}
+  msg.style.color='var(--text2)';msg.textContent='변경 중...';
+  try{
+    const h=await sha256(p1);
+    const r=await fetch(authPath(),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({hash:h})});
+    msg.style.color=r.ok?'var(--green)':'var(--red)';
+    msg.textContent=r.ok?'변경 완료! 새 비밀번호를 팀원들에게 알려주세요.':'저장 실패.';
+  }catch{msg.style.color='var(--red)';msg.textContent='오류가 발생했습니다.';}
+  document.getElementById('npw1').value='';document.getElementById('npw2').value='';
+}
+
+init();
+</script>
 </body>
 </html>
