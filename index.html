@@ -325,15 +325,27 @@ let ms=[],ceo='',curKey='',allWeeks=[],isRO=false,isDirty=false,loadedAt=null;
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // WEATHER
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const WX_EMOJIS={clear_spring:'🌸',clear_summer:'☀️',clear_autumn:'🍂',clear_winter:'❄️',cloudy:'☁️',rain:'🌧️',snow:'🌨️',thunder:'⛈️',fog:'🌫️'};
+const WX_EMOJIS={clear_spring:'☀️',clear_summer:'☀️',clear_autumn:'☀️',clear_winter:'☀️',cloudy:'☁️',rain:'🌧️',snow:'🌨️',thunder:'⛈️',fog:'🌫️'};
 
-function getSeason(m){if(m>=3&&m<=5)return'spring';if(m>=6&&m<=8)return'summer';if(m>=9&&m<=11)return'autumn';return'winter';}
+function getSeason(m){
+  if(m>=3&&m<=5)return'spring';
+  if(m>=6&&m<=8)return'summer';
+  if(m>=9&&m<=11)return'autumn';
+  return'winter';
+}
 function getCondition(code){
-  if(code<=1)return'clear';if(code<=3)return'cloudy';
-  if(code<=48)return'fog';if(code<=67||code<=82)return'rain';
-  if(code<=77||code<=86)return'snow';if(code>=95)return'thunder';
+  if(code<=1)return'clear';
+  if(code<=3)return'cloudy';
+  if(code<=48)return'fog';
+  if(code<=82)return'rain';
+  if(code<=86)return'snow';
+  if(code>=95)return'thunder';
   return'cloudy';
 }
+const WX_EMOJI={
+  clear_spring:'☀️',clear_summer:'☀️',clear_autumn:'☀️',clear_winter:'☀️',
+  cloudy:'☁️',fog:'🌫️',rain:'🌧️',snow:'🌨️',thunder:'⛈️'
+};
 
 async function fetchWeather(){
   const now=new Date();
@@ -343,179 +355,215 @@ async function fetchWeather(){
   const tempEl=document.getElementById('wx-temp');
   if(dateEl)dateEl.textContent=`${now.getMonth()+1}/${now.getDate()} (${days[now.getDay()]})`;
   const season=getSeason(now.getMonth()+1);
-  // 계절 기본 이모지 먼저 표시
-  const defaultEmoji={spring:'🌸',summer:'☀️',autumn:'🍂',winter:'❄️'};
-  if(emojiEl)emojiEl.textContent=defaultEmoji[season]||'🌤️';
-  if(tempEl)tempEl.textContent='날씨 로딩중';
-  // 계절 배경 먼저 적용
+  // 계절 배경 먼저 즉시 적용
   applyWeatherBg('clear',season);
+  if(emojiEl)emojiEl.textContent='☀️';
+  if(tempEl)tempEl.textContent='--°C';
   try{
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),5000);
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),6000);
     const r=await fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia/Seoul',
-      {signal:controller.signal}
+      'https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia%2FSeoul&forecast_days=1',
+      {signal:ctrl.signal}
     );
-    clearTimeout(timer);
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    clearTimeout(t);
+    if(!r.ok)throw new Error('API '+r.status);
     const d=await r.json();
     const temp=Math.round(d.current.temperature_2m);
     const cond=getCondition(d.current.weather_code);
-    const emojiKey=cond==='clear'?`clear_${season}`:cond;
-    if(emojiEl)emojiEl.textContent=WX_EMOJI[emojiKey]||'🌤️';
-    if(tempEl)tempEl.textContent=`${temp}°C`;
+    const key=cond==='clear'?`clear_${season}`:cond;
+    if(emojiEl)emojiEl.textContent=WX_EMOJI[key]||'☀️';
+    if(tempEl)tempEl.textContent=temp+'°C';
     applyWeatherBg(cond,season);
-  }catch(err){
-    console.log('날씨 API 오류:',err.message);
+  }catch(e){
+    console.warn('날씨 로드 실패:',e.message);
     if(tempEl)tempEl.textContent='';
-    // 계절 배경은 이미 적용됨
   }
 }
 
+/* ── 배경 적용 ── */
 function applyWeatherBg(cond,season){
-  const bg=document.getElementById('wx-bg');if(!bg)return;
+  const bg=document.getElementById('wx-bg');
+  if(!bg)return;
   bg.innerHTML='';
   const theme=['rain','snow','fog','cloudy','thunder'].includes(cond)?cond:season;
-  // 배경 그라디언트
-  const grads={
-    spring:'radial-gradient(ellipse at 78% 2%,#f0d0e4 0%,#eae0f2 45%,#e4eaf8 100%)',
-    summer:'radial-gradient(ellipse at 78% 2%,#90ccf4 0%,#b8e0f8 50%,#daf0ff 100%)',
-    autumn:'radial-gradient(ellipse at 78% 2%,#f0c068 0%,#f5d898 50%,#f8edd8 100%)',
-    winter:'radial-gradient(ellipse at 78% 2%,#98c4e8 0%,#c0d8f0 50%,#e4f0fc 100%)',
-    rain:'linear-gradient(150deg,#a8b8cc 0%,#c0ccd8 55%,#d4dce6 100%)',
-    snow:'radial-gradient(ellipse at 50% 0%,#a8c4e0 0%,#c8daf0 55%,#e4eef8 100%)',
-    fog:'linear-gradient(180deg,#b4b8c4 0%,#c4c8d2 55%,#d4d8e0 100%)',
-    cloudy:'linear-gradient(150deg,#b0b4c8 0%,#c4c8d8 55%,#d4d8e8 100%)',
-    thunder:'linear-gradient(150deg,#8878a8 0%,#a098bc 55%,#bcb4d0 100%)',
+  const bgMap={
+    spring:'linear-gradient(160deg,#f0d8ec 0%,#ead8f5 45%,#e8e0f8 100%)',
+    summer:'linear-gradient(160deg,#b8e0f8 0%,#cceaff 45%,#e0f4ff 100%)',
+    autumn:'linear-gradient(160deg,#f5d080 0%,#f8e4b0 45%,#faf0d8 100%)',
+    winter:'linear-gradient(160deg,#a8ccf0 0%,#c8e0f8 45%,#e8f4ff 100%)',
+    rain:'linear-gradient(160deg,#8898b0 0%,#a8b8c8 45%,#c8d4e0 100%)',
+    snow:'linear-gradient(160deg,#a8c0e0 0%,#c0d4f0 45%,#dce8f8 100%)',
+    fog:'linear-gradient(160deg,#9098a8 0%,#b0b8c4 55%,#ccd4dc 100%)',
+    cloudy:'linear-gradient(160deg,#9098b0 0%,#b0b8c8 45%,#ced6e4 100%)',
+    thunder:'linear-gradient(160deg,#504870 0%,#706890 55%,#9088b0 100%)',
   };
-  const bgBase={
-    spring:'#f2e8f5',summer:'#deeeff',autumn:'#f8ecdc',winter:'#e0ecf8',
-    rain:'#d5dde8',snow:'#e2ecf8',fog:'#d8dbe3',cloudy:'#d4d8e4',thunder:'#cdc9de'
-  };
-  bg.style.background=grads[theme]||grads.spring;
-  document.documentElement.style.setProperty('--bg3',bgBase[theme]||'#f0efe9');
-
-  // 하늘 날씨 아이콘
-  addSkyIcon(bg,cond);
-  // 계절 나무숲
-  addTreeScene(bg,season);
-  // 날씨별 추가 요소
-  addWeatherExtra(bg,cond);
+  bg.style.cssText=`position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;background:${bgMap[theme]||bgMap.spring};`;
+  document.documentElement.style.setProperty('--bg3','transparent');
+  drawTrees(bg,season);
+  drawWeatherIcon(bg,cond);
+  drawWeatherExtra(bg,cond);
 }
 
-function addSkyIcon(bg,cond){
-  // 맑음은 항상 노란 해 (계절 무관)
+/* ── 계절 나무숲 ── */
+function drawTrees(bg,season){
+  const c={
+    spring:{trunk:'#8a5c30',leaf:['#f5b8ce','#f0a8c0','#fac8d8','#f0b0c8'],ground:'#d4e8b0'},
+    summer:{trunk:'#5a3820',leaf:['#3a8030','#4a9038','#2e7028','#5aa040'],ground:'#60a840'},
+    autumn:{trunk:'#5a3010',leaf:['#e06010','#c84808','#f07820','#d05010'],ground:'#c08030'},
+    winter:{trunk:'#3a3028',leaf:['#2a4820','#3a5828','#224018','#304820'],ground:'#e8f0f8'},
+  }[season]||{trunk:'#7a5028',leaf:['#4a9038'],ground:'#88b840'};
+
+  const W=700,H=180;
+  const trees=[
+    {x:60,h:95,r:32},{x:150,h:115,r:38},{x:245,h:100,r:34},
+    {x:340,h:120,r:40},{x:438,h:105,r:35},{x:530,h:110,r:36},
+    {x:618,h:92,r:30},{x:690,h:100,r:32},
+  ];
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet" style="width:100%;height:100%;">`;
+
+  // 하늘-땅 경계 (지면)
+  svg+=`<path d="M0,${H*0.68} Q${W/4},${H*0.62} ${W/2},${H*0.66} Q${W*3/4},${H*0.70} ${W},${H*0.64} L${W},${H} L0,${H} Z" fill="${c.ground}" opacity="0.35"/>`;
+
+  if(season==='winter'){
+    // 겨울: 삼각형 소나무
+    trees.forEach((t,i)=>{
+      const bx=t.x, by=H*0.7, leafCol=c.leaf[i%c.leaf.length];
+      svg+=`<rect x="${bx-4}" y="${by-t.h*0.3}" width="8" height="${t.h*0.3}" rx="2" fill="${c.trunk}" opacity="0.7"/>`;
+      // 3단 삼각형
+      [0,1,2].forEach(layer=>{
+        const ly=by-t.h*0.3-(layer*(t.h*0.22));
+        const lw=t.r*(0.5+layer*0.2);
+        const lh=t.h*0.28;
+        svg+=`<polygon points="${bx},${ly-lh} ${bx-lw},${ly} ${bx+lw},${ly}" fill="${leafCol}" opacity="${0.7+layer*0.05}"/>`;
+        // 눈 덮임
+        svg+=`<polygon points="${bx},${ly-lh} ${bx-lw*0.72},${ly-lh*0.35} ${bx+lw*0.72},${ly-lh*0.35}" fill="white" opacity="0.42"/>`;
+      });
+    });
+    // 눈 쌓인 지면
+    svg+=`<path d="M0,${H*0.68} Q${W/4},${H*0.64} ${W/2},${H*0.67} Q${W*3/4},${H*0.71} ${W},${H*0.65} L${W},${H*0.72} Q${W*3/4},${H*0.76} ${W/2},${H*0.73} Q${W/4},${H*0.70} 0,${H*0.74} Z" fill="white" opacity="0.45"/>`;
+  } else {
+    // 봄/여름/가을: 둥근 나무
+    trees.forEach((t,i)=>{
+      const bx=t.x, by=H*0.7, leafCol=c.leaf[i%c.leaf.length];
+      const leafCol2=c.leaf[(i+1)%c.leaf.length];
+      const leafCol3=c.leaf[(i+2)%c.leaf.length];
+      // 나무 기둥
+      svg+=`<rect x="${bx-5}" y="${by-t.h*0.45}" width="10" height="${t.h*0.45}" rx="3" fill="${c.trunk}" opacity="0.65"/>`;
+      // 나뭇잎 (3개 겹친 원)
+      svg+=`<circle cx="${bx-t.r*0.35}" cy="${by-t.h*0.55}" r="${t.r*0.72}" fill="${leafCol2}" opacity="0.58"/>`;
+      svg+=`<circle cx="${bx+t.r*0.35}" cy="${by-t.h*0.52}" r="${t.r*0.70}" fill="${leafCol3}" opacity="0.55"/>`;
+      svg+=`<circle cx="${bx}" cy="${by-t.h*0.68}" r="${t.r}" fill="${leafCol}" opacity="0.62"/>`;
+      // 봄: 꽃 점
+      if(season==='spring'){
+        for(let f=0;f<5;f++){
+          const fa=(f/5)*Math.PI*2;
+          const fx=bx+Math.cos(fa)*t.r*0.55, fy=(by-t.h*0.68)+Math.sin(fa)*t.r*0.48;
+          svg+=`<circle cx="${fx.toFixed(1)}" cy="${fy.toFixed(1)}" r="3.5" fill="white" opacity="0.55"/>`;
+        }
+      }
+    });
+  }
+  svg+='</svg>';
+
+  const el=document.createElement('div');
+  el.style.cssText='position:absolute;bottom:0;left:0;width:100%;height:52%;pointer-events:none;';
+  el.innerHTML=svg;
+  bg.appendChild(el);
+}
+
+/* ── 날씨 아이콘 (우상단) ── */
+function drawWeatherIcon(bg,cond){
   const icons={
-    clear:`<svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="55" cy="55" r="22" fill="#FFD040" opacity="0.92"/>
-      <g stroke="#FFB800" stroke-width="2.5" stroke-linecap="round">
-        <line x1="55" y1="28" x2="55" y2="20"/><line x1="55" y1="82" x2="55" y2="90"/>
-        <line x1="28" y1="55" x2="20" y2="55"/><line x1="82" y1="55" x2="90" y2="55"/>
-        <line x1="37" y1="37" x2="31" y2="31"/><line x1="73" y1="73" x2="79" y2="79"/>
-        <line x1="73" y1="37" x2="79" y2="31"/><line x1="37" y1="73" x2="31" y2="79"/>
+    clear:`<svg viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="45" cy="45" r="18" fill="#FFD030"/>
+      <g stroke="#FFA800" stroke-width="2.5" stroke-linecap="round">
+        <line x1="45" y1="22" x2="45" y2="15"/><line x1="45" y1="68" x2="45" y2="75"/>
+        <line x1="22" y1="45" x2="15" y2="45"/><line x1="68" y1="45" x2="75" y2="45"/>
+        <line x1="30" y1="30" x2="25" y2="25"/><line x1="60" y1="60" x2="65" y2="65"/>
+        <line x1="60" y1="30" x2="65" y2="25"/><line x1="30" y1="60" x2="25" y2="65"/>
       </g>
     </svg>`,
-    cloudy:`<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
-      <path d="M175,85 C168,85 162,79 162,71 C162,63 168,57 176,57 C178,45 188,36 200,36 C212,36 222,45 224,57 C230,54 237,57 239,65 C241,73 235,81 227,82 Z" fill="#9898b0" opacity="0.75"/>
-      <path d="M100,90 C91,90 83,83 83,73 C83,63 91,56 100,56 C102,42 113,32 126,32 C139,32 150,42 152,56 C159,52 167,55 169,65 C171,75 164,84 154,85 Z" fill="#a0a0b8" opacity="0.82"/>
+    cloudy:`<svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M96,58 C90,58 85,53 85,47 C85,41 90,36 96,36 C97,26 105,18 115,18 C125,18 133,26 134,36 C139,33 145,36 146,43 C147,50 141,57 134,58 Z" fill="#c8ccd8" opacity="0.9"/>
+      <path d="M56,64 C49,64 43,58 43,51 C43,44 49,39 56,39 C57,27 66,19 77,19 C88,19 97,27 98,39 C104,36 111,39 112,47 C113,55 107,62 99,64 Z" fill="#d0d4e0" opacity="0.95"/>
     </svg>`,
-    rain:`<svg viewBox="0 0 180 140" xmlns="http://www.w3.org/2000/svg">
-      <path d="M155,72 C148,72 142,66 142,58 C142,50 148,44 156,44 C158,33 167,25 178,25 C189,25 198,33 200,44 C206,41 213,44 215,52 C217,60 211,68 203,69 Z" fill="#7090b0" opacity="0.78"/>
-      <g stroke="#6080a0" stroke-width="2.2" stroke-linecap="round" opacity="0.9">
-        <line x1="150" y1="82" x2="143" y2="102"/>
-        <line x1="168" y1="80" x2="161" y2="100"/>
-        <line x1="186" y1="82" x2="179" y2="102"/>
-        <line x1="204" y1="80" x2="197" y2="100"/>
+    rain:`<svg viewBox="0 0 120 100" xmlns="http://www.w3.org/2000/svg">
+      <path d="M90,50 C84,50 79,45 79,38 C79,31 84,26 91,26 C92,16 100,9 110,9 C120,9 128,16 129,26 C134,23 140,26 141,33 C142,40 137,47 130,48 Z" fill="#6888a8" opacity="0.88"/>
+      <g stroke="#5070a0" stroke-width="2.5" stroke-linecap="round" opacity="0.85">
+        <line x1="85" y1="60" x2="78" y2="80"/>
+        <line x1="100" y1="58" x2="93" y2="78"/>
+        <line x1="115" y1="60" x2="108" y2="80"/>
+        <line x1="130" y1="58" x2="123" y2="78"/>
       </g>
     </svg>`,
-    thunder:`<svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
-      <path d="M160,70 C151,70 143,63 143,53 C143,43 151,36 161,36 C163,23 174,13 187,13 C200,13 211,23 213,36 C220,33 228,36 230,46 C232,56 225,65 215,66 Z" fill="#505478" opacity="0.85"/>
-      <polygon points="178,78 158,118 174,118 158,150 196,104 178,104 194,78" fill="#ffe840" opacity="0.9"/>
-      <polygon points="178,78 158,118 174,118 158,150 196,104 178,104 194,78" fill="none" stroke="#ffd000" stroke-width="1"/>
+    thunder:`<svg viewBox="0 0 130 120" xmlns="http://www.w3.org/2000/svg">
+      <path d="M95,55 C88,55 82,49 82,42 C82,35 88,30 95,30 C96,19 105,11 116,11 C127,11 136,19 137,30 C143,27 150,30 151,38 C152,46 146,54 138,55 Z" fill="#504870" opacity="0.92"/>
+      <polygon points="108,62 90,98 107,98 92,118 130,80 111,80 126,62" fill="#ffe030" opacity="0.95"/>
     </svg>`,
-    snow:`<svg viewBox="0 0 180 110" xmlns="http://www.w3.org/2000/svg">
-      <path d="M150,68 C143,68 137,62 137,54 C137,46 143,40 151,40 C153,29 162,21 173,21 C184,21 193,29 195,40 C201,37 208,40 210,48 C212,56 206,64 198,65 Z" fill="#a0b8d0" opacity="0.72"/>
+    snow:`<svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M90,55 C84,55 79,50 79,43 C79,36 84,31 91,31 C92,21 100,14 110,14 C120,14 128,21 129,31 C134,28 140,31 141,38 C142,45 137,52 130,53 Z" fill="#a8c4e4" opacity="0.85"/>
     </svg>`,
-    fog:`<svg viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg">
-      <path d="M160,70 C151,70 144,63 144,54 C144,45 151,39 160,39 C162,28 172,20 184,20 C196,20 206,28 208,39 C215,36 222,40 224,49 C226,58 219,67 210,68 Z" fill="#9898b0" opacity="0.65"/>
-      <path d="M5,90 Q55,82 110,90 Q160,97 205,88" stroke="#9898a8" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.45"/>
-      <path d="M5,108 Q60,100 115,108 Q165,115 205,106" stroke="#9090a0" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.35"/>
+    fog:`<svg viewBox="0 0 130 90" xmlns="http://www.w3.org/2000/svg">
+      <path d="M95,48 C89,48 84,43 84,36 C84,29 89,24 96,24 C97,14 105,7 115,7 C125,7 133,14 134,24 C139,21 145,24 146,31 C147,38 142,45 135,46 Z" fill="#9898b0" opacity="0.72"/>
+      <path d="M5,62 Q35,56 70,62 Q105,68 130,62" stroke="#8888a0" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.55"/>
+      <path d="M5,76 Q40,70 75,76 Q108,82 130,76" stroke="#8080a0" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.42"/>
     </svg>`,
   };
   const icon=icons[cond]||icons.clear;
-  const pos={
-    clear:{top:'2%',right:'2%',w:'100px',h:'100px'},
-    cloudy:{top:'0',right:'-5px',w:'230px',h:'140px'},
-    rain:{top:'0',right:'0',w:'175px',h:'132px'},
-    thunder:{top:'0',right:'0',w:'195px',h:'152px'},
-    snow:{top:'2%',right:'0',w:'170px',h:'102px'},
-    fog:{top:'0',right:'-5px',w:'230px',h:'140px'},
-  }[cond]||{top:'2%',right:'2%',w:'100px',h:'100px'};
+  const sizes={clear:'90px',cloudy:'130px',rain:'130px',thunder:'140px',snow:'130px',fog:'140px'};
+  const w=sizes[cond]||'90px';
   const el=document.createElement('div');
-  el.style.cssText=`position:absolute;top:${pos.top};right:${pos.right};width:${pos.w};height:${pos.h};opacity:0.55;pointer-events:none;`;
-  el.innerHTML=icon;bg.appendChild(el);
+  el.style.cssText=`position:absolute;top:0;right:0;width:${w};height:${w};opacity:0.6;pointer-events:none;`;
+  el.innerHTML=icon;
+  bg.appendChild(el);
 }
 
-function addTreeScene(bg,season){
-  const trees={
-    spring:`<path d="M-5,183 C5,170 15,158 28,163 C36,167 42,157 52,150 C59,145 68,143 78,150 C85,155 91,149 100,143 C107,138 116,136 125,143 C132,148 138,142 147,136 C154,131 163,129 172,136 C179,141 185,135 194,129 C201,124 210,122 219,129 C226,134 232,128 241,122 C248,118 257,116 266,122 C272,126 278,120 285,115 L285,183 Z" fill="#c0a0b4" opacity="0.38"/>`,
-    summer:`<path d="M-5,183 C4,168 16,154 30,160 C38,164 44,153 56,146 C63,141 73,139 83,146 C90,151 96,145 106,139 C113,134 123,132 133,139 C140,144 146,138 156,132 C163,127 173,125 183,132 C190,137 196,131 206,125 C213,120 223,118 233,125 C240,130 246,124 256,118 C263,114 272,112 281,118 L285,122 L285,183 Z" fill="#3a6828" opacity="0.35"/>`,
-    autumn:`<path d="M-5,183 C6,173 14,163 24,160 C31,157 38,150 48,144 C55,139 64,137 74,143 C81,148 87,142 95,136 C102,131 111,129 120,135 C127,140 133,134 141,128 C148,123 157,121 165,127 C172,132 178,126 186,121 C193,117 202,115 210,121 C217,126 223,120 231,115 C238,111 247,109 256,115 C262,119 268,113 276,108 L285,112 L285,183 Z" fill="#904820" opacity="0.35"/>`,
-    winter:`<path d="M-5,183 L-5,158 L2,140 L8,155 L14,146 L20,126 L26,146 L32,155 L39,142 L45,122 L51,142 L57,152 L64,140 L70,119 L76,140 L82,149 L89,137 L95,116 L101,137 L107,146 L114,134 L120,113 L126,134 L132,143 L139,131 L145,110 L151,131 L157,140 L164,128 L170,108 L176,128 L182,137 L189,125 L195,105 L201,125 L207,134 L214,122 L220,102 L226,122 L232,131 L239,119 L245,99 L251,119 L257,128 L264,116 L270,96 L276,116 L282,125 L285,116 L285,183 Z" fill="#384830" opacity="0.35"/>
-      <path d="M-5,162 C8,157 17,159 26,157 C32,155 38,160 47,158 C53,156 60,161 68,159 C74,157 80,162 89,160 C95,158 101,162 110,161 L285,152 L285,167 Z" fill="white" opacity="0.42"/>`,
-  };
-  const ground={
-    spring:`<path d="M-5,188 L285,188 L285,183 C265,179 220,183 180,180 C140,177 80,183 -5,180 Z" fill="#c8d898" opacity="0.28"/>`,
-    summer:`<path d="M-5,188 L285,188 L285,183 C250,176 190,182 140,179 C90,176 30,182 -5,180 Z" fill="#5a9040" opacity="0.28"/>`,
-    autumn:`<path d="M-5,188 L285,188 L285,183 C255,178 195,183 150,180 C105,177 45,182 -5,180 Z" fill="#8b6020" opacity="0.25"/>`,
-    winter:`<path d="M-5,188 L285,188 L285,183 C250,179 190,182 140,180 C90,178 30,183 -5,181 Z" fill="#e8eef8" opacity="0.38"/>`,
-  };
-  const svgContent=`<svg viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet" style="width:100%;height:100%;">${trees[season]||trees.spring}${ground[season]||''}</svg>`;
-  const el=document.createElement('div');
-  el.style.cssText='position:absolute;bottom:0;left:0;width:100%;height:55%;pointer-events:none;';
-  el.innerHTML=svgContent;bg.appendChild(el);
-}
-
-function addWeatherExtra(bg,cond){
+/* ── 날씨별 추가 요소 (우하단) ── */
+function drawWeatherExtra(bg,cond){
   if(cond==='rain'){
     const el=document.createElement('div');
-    el.style.cssText='position:absolute;bottom:0;right:0;width:160px;height:190px;opacity:0.5;pointer-events:none;';
-    el.innerHTML=`<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg">
-      <path d="M14,98 Q14,28 80,22 Q146,28 146,98 Z" fill="#6090c8" opacity="0.85"/>
-      <path d="M14,98 Q27,82 40,98 Q53,114 67,98 Q80,82 93,98 Q106,114 120,98 Q133,82 146,98" fill="#5080b8" opacity="0.9"/>
-      <g stroke="#4070a8" stroke-width="1.5" opacity="0.45">
-        <line x1="80" y1="98" x2="14" y2="98"/><line x1="80" y1="98" x2="36" y2="40"/>
-        <line x1="80" y1="98" x2="80" y2="22"/><line x1="80" y1="98" x2="124" y2="40"/>
-        <line x1="80" y1="98" x2="146" y2="98"/>
+    el.style.cssText='position:absolute;bottom:0;right:0;width:150px;height:175px;opacity:0.5;pointer-events:none;';
+    el.innerHTML=`<svg viewBox="0 0 150 175" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14,90 Q14,26 75,20 Q136,26 136,90 Z" fill="#5888c8" opacity="0.88"/>
+      <path d="M14,90 Q27,74 40,90 Q53,106 67,90 Q75,74 83,90 Q96,106 110,90 Q122,74 136,90" fill="#4878b8" opacity="0.92"/>
+      <g stroke="#3868a0" stroke-width="1.5" opacity="0.4">
+        <line x1="75" y1="90" x2="14" y2="90"/><line x1="75" y1="90" x2="37" y2="38"/>
+        <line x1="75" y1="90" x2="75" y2="20"/><line x1="75" y1="90" x2="113" y2="38"/>
+        <line x1="75" y1="90" x2="136" y2="90"/>
       </g>
-      <line x1="80" y1="98" x2="80" y2="158" stroke="#3a6098" stroke-width="5.5" stroke-linecap="round"/>
-      <path d="M80,158 Q80,174 93,174 Q106,174 106,162" stroke="#3a6098" stroke-width="5.5" fill="none" stroke-linecap="round"/>
-      <g stroke="#6090c8" stroke-width="2.5" stroke-linecap="round" opacity="0.7">
-        <line x1="28" y1="122" x2="21" y2="144"/><line x1="56" y1="126" x2="49" y2="148"/>
-        <line x1="110" y1="122" x2="103" y2="144"/><line x1="136" y1="126" x2="129" y2="148"/>
+      <line x1="75" y1="90" x2="75" y2="150" stroke="#2858a0" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M75,150 Q75,164 86,164 Q97,164 97,154" stroke="#2858a0" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+      <g stroke="#5888c8" stroke-width="2.5" stroke-linecap="round" opacity="0.75">
+        <line x1="25" y1="110" x2="18" y2="130"/>
+        <line x1="55" y1="114" x2="48" y2="134"/>
+        <line x1="105" y1="110" x2="98" y2="130"/>
+        <line x1="132" y1="114" x2="125" y2="134"/>
       </g>
     </svg>`;
     bg.appendChild(el);
   }else if(cond==='snow'){
     const el=document.createElement('div');
-    el.style.cssText='position:absolute;bottom:0;right:0;width:150px;height:185px;opacity:0.48;pointer-events:none;';
-    el.innerHTML=`<svg viewBox="0 0 150 185" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="75" cy="150" r="32" fill="none" stroke="#a0c0e0" stroke-width="2"/>
-      <circle cx="75" cy="104" r="22" fill="none" stroke="#a0c0e0" stroke-width="2"/>
-      <circle cx="75" cy="68" r="16" fill="none" stroke="#a0c0e0" stroke-width="2"/>
-      <line x1="69" y1="64" x2="69" y2="64" stroke="#4488aa" stroke-width="4" stroke-linecap="round"/>
-      <line x1="81" y1="64" x2="81" y2="64" stroke="#4488aa" stroke-width="4" stroke-linecap="round"/>
-      <path d="M68,74 Q75,77 82,74" stroke="#5590aa" stroke-width="1.8" fill="none"/>
-      <rect x="61" y="47" width="28" height="20" rx="3" fill="#5580a0" opacity="0.8"/>
-      <rect x="54" y="50" width="42" height="6" rx="3" fill="#4470a0" opacity="0.8"/>
-      <path d="M57,86 Q75,91 93,86" stroke="#e05050" stroke-width="6" fill="none" stroke-linecap="round"/>
-      <g stroke="#a8c8e8" stroke-linecap="round" stroke-width="1.8">
-        <line x1="18" y1="30" x2="18" y2="42"/><line x1="12" y1="36" x2="24" y2="36"/>
-        <line x1="14" y1="32" x2="22" y2="40"/><line x1="14" y1="40" x2="22" y2="32"/>
-        <line x1="125" y1="45" x2="125" y2="55"/><line x1="120" y1="50" x2="130" y2="50"/>
-        <line x1="121.5" y1="46.5" x2="128.5" y2="53.5"/><line x1="121.5" y1="53.5" x2="128.5" y2="46.5"/>
-        <line x1="38" y1="155" x2="38" y2="163"/><line x1="34" y1="159" x2="42" y2="159"/>
-        <line x1="35" y1="156" x2="41" y2="162"/><line x1="35" y1="162" x2="41" y2="156"/>
+    el.style.cssText='position:absolute;bottom:0;right:0;width:145px;height:178px;opacity:0.48;pointer-events:none;';
+    el.innerHTML=`<svg viewBox="0 0 145 178" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="72" cy="148" r="30" fill="none" stroke="#90b8d8" stroke-width="2.2"/>
+      <circle cx="72" cy="104" r="22" fill="none" stroke="#90b8d8" stroke-width="2.2"/>
+      <circle cx="72" cy="68" r="16" fill="none" stroke="#90b8d8" stroke-width="2.2"/>
+      <circle cx="66" cy="64" r="2.8" fill="#4488aa"/><circle cx="78" cy="64" r="2.8" fill="#4488aa"/>
+      <path d="M65,73 Q72,76 79,73" stroke="#5590aa" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <ellipse cx="72" cy="69" rx="1.4" ry="3.5" fill="#e09050"/>
+      <circle cx="72" cy="96" r="2.5" fill="#6898b8"/><circle cx="72" cy="104" r="2.5" fill="#6898b8"/><circle cx="72" cy="112" r="2.5" fill="#6898b8"/>
+      <rect x="57" y="46" width="30" height="21" rx="3" fill="#4878a0" opacity="0.85"/>
+      <rect x="50" y="49" width="44" height="6" rx="3" fill="#3868a0" opacity="0.85"/>
+      <path d="M52,82 Q72,88 92,82" stroke="#d84848" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+      <g stroke="#90b8d8" stroke-linecap="round" stroke-width="1.8">
+        <line x1="18" y1="28" x2="18" y2="40"/><line x1="12" y1="34" x2="24" y2="34"/>
+        <line x1="14" y1="30" x2="22" y2="38"/><line x1="14" y1="38" x2="22" y2="30"/>
+        <line x1="118" y1="40" x2="118" y2="50"/><line x1="113" y1="45" x2="123" y2="45"/>
+        <line x1="115" y1="41" x2="121" y2="47"/><line x1="115" y1="47" x2="121" y2="41"/>
+        <line x1="28" y1="152" x2="28" y2="160"/><line x1="24" y1="156" x2="32" y2="156"/>
+        <line x1="25" y1="153" x2="31" y2="159"/><line x1="25" y1="159" x2="31" y2="153"/>
       </g>
     </svg>`;
     bg.appendChild(el);
