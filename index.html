@@ -160,6 +160,11 @@ textarea.sm{min-height:90px;}
 .ldd:nth-child(2){animation-delay:.18s;}
 .ldd:nth-child(3){animation-delay:.36s;}
 @keyframes pulse{0%,80%,100%{transform:scale(.55)}40%{transform:scale(1)}}
+
+.wx-strip{display:flex;align-items:center;gap:8px;padding:5px 11px;border-radius:var(--border-radius-lg,10px);background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.8);flex-shrink:0;}
+.wx-emoji{font-size:18px;line-height:1;}
+.wx-temp{font-size:14px;font-weight:700;color:var(--color-text-primary,#1a1a18);}
+.wx-date{font-size:10px;color:var(--color-text-secondary,#6b6a65);}
 </style>
 </head>
 <body>
@@ -331,93 +336,198 @@ function getCondition(code){
 }
 
 async function fetchWeather(){
-  // 날짜 표시
   const now=new Date();
   const days=['일','월','화','수','목','금','토'];
-  document.getElementById('wx-date').textContent=
-    `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} (${days[now.getDay()]})`;
+  const el=document.getElementById('wx-date');
+  if(el)el.textContent=`${now.getMonth()+1}/${now.getDate()} (${days[now.getDay()]})`;
+  const season=getSeason(now.getMonth()+1);
   try{
     const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia/Seoul');
-    if(!r.ok)return;
+    if(!r.ok)throw new Error();
     const d=await r.json();
     const temp=Math.round(d.current.temperature_2m);
-    const code=d.current.weather_code;
-    const season=getSeason(now.getMonth()+1);
-    const cond=getCondition(code);
-    const key=cond==='clear'?`clear_${season}`:cond;
-    const emoji=WX_EMOJIS[key]||'🌤️';
-    document.getElementById('wx-emoji').textContent=emoji;
-    document.getElementById('wx-temp').textContent=`${temp}°C`;
+    const cond=getCondition(d.current.weather_code);
+    const emojiKey=cond==='clear'?`clear_${season}`:cond;
+    const ee=document.getElementById('wx-emoji');
+    const et=document.getElementById('wx-temp');
+    if(ee)ee.textContent=WX_EMOJI[emojiKey]||'🌤️';
+    if(et)et.textContent=`${temp}°C`;
     applyWeatherBg(cond,season);
-  }catch{applyWeatherBg('clear',getSeason(new Date().getMonth()+1));}
-}
-
-function applyWeatherBg(cond,season){
-  const bg=document.getElementById('wx-bg');
-  bg.innerHTML='';
-  // 배경색 설정
-  const bgColors={
-    spring:'#fce8f2',summer:'#ddeeff',autumn:'#fae8d4',winter:'#dce8f5',
-    rain:'#d8dfe8',snow:'#e8f0f8',fog:'#e0e2e8',cloudy:'#dde0e8',thunder:'#d0d0da'
-  };
-  const theme=(['rain','snow','fog','cloudy','thunder'].includes(cond))?cond:season;
-  document.documentElement.style.setProperty('--bg3-override',bgColors[theme]||'#f0efe9');
-
-  // 파티클 생성
-  const configs={
-    spring:{count:18,cls:'petal',colors:['#ffb7c5','#ff9eb5','#ffd0dd','#ff85a1'],w:8,h:6,rot:true,sway:true},
-    autumn:{count:14,cls:'leaf',colors:['#e8621a','#d4420a','#f0821a','#c84808','#e89030'],w:12,h:9,rot:true,sway:true},
-    winter:{count:22,cls:'snow',colors:['rgba(255,255,255,0.9)','rgba(220,235,255,0.8)'],w:5,h:5,rot:false,sway:false},
-    snow:{count:25,cls:'snow',colors:['rgba(255,255,255,0.9)','rgba(200,220,255,0.8)'],w:6,h:6,rot:false,sway:false},
-    rain:{count:35,cls:'rain',colors:['rgba(100,140,190,0.4)'],w:2,h:16,rot:false,sway:false},
-    summer:{count:0},fog:{count:0},cloudy:{count:0},thunder:{count:0}
-  };
-  const cfg=configs[theme]||{count:0};
-  if(!cfg.count)return;
-
-  for(let i=0;i<cfg.count;i++){
-    const el=document.createElement('div');
-    el.className='ptcl';
-    const color=cfg.colors[Math.floor(Math.random()*cfg.colors.length)];
-    const left=Math.random()*105;
-    const delay=Math.random()*8;
-    const dur=cfg.cls==='rain'?(0.6+Math.random()*0.4):(4+Math.random()*6);
-    const size=0.7+Math.random()*0.6;
-    const sway=cfg.sway?(Math.random()*30-15)+'px':'0px';
-
-    el.style.cssText=`
-      left:${left}vw;
-      animation-delay:-${delay}s;
-      animation-duration:${dur}s;
-      --sx:${sway};
-      width:${cfg.w*size}px;height:${cfg.h*size}px;
-      border-radius:${cfg.cls==='petal'?'60% 40% 50% 50%':cfg.cls==='leaf'?'50% 20%':'50%'};
-      background:${color};
-      ${cfg.cls==='rain'?'animation-name:ptclRain;border-radius:2px;':''}
-    `;
-    if(cfg.cls==='petal'||cfg.cls==='leaf'){
-      el.style.transform=`rotate(${Math.random()*360}deg)`;
-    }
-    bg.appendChild(el);
+  }catch{
+    applyWeatherBg('clear',season);
   }
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AUTH & INIT
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function sha256(s){
-  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+'_wk25'));
-  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
-  catch{return btoa(s+'_wk25');}
+function applyWeatherBg(cond,season){
+  const bg=document.getElementById('wx-bg');if(!bg)return;
+  bg.innerHTML='';
+  const theme=['rain','snow','fog','cloudy','thunder'].includes(cond)?cond:season;
+  // 배경 그라디언트
+  const grads={
+    spring:'radial-gradient(ellipse at 78% 2%,#f0d0e4 0%,#eae0f2 45%,#e4eaf8 100%)',
+    summer:'radial-gradient(ellipse at 78% 2%,#90ccf4 0%,#b8e0f8 50%,#daf0ff 100%)',
+    autumn:'radial-gradient(ellipse at 78% 2%,#f0c068 0%,#f5d898 50%,#f8edd8 100%)',
+    winter:'radial-gradient(ellipse at 78% 2%,#98c4e8 0%,#c0d8f0 50%,#e4f0fc 100%)',
+    rain:'linear-gradient(150deg,#a8b8cc 0%,#c0ccd8 55%,#d4dce6 100%)',
+    snow:'radial-gradient(ellipse at 50% 0%,#a8c4e0 0%,#c8daf0 55%,#e4eef8 100%)',
+    fog:'linear-gradient(180deg,#b4b8c4 0%,#c4c8d2 55%,#d4d8e0 100%)',
+    cloudy:'linear-gradient(150deg,#b0b4c8 0%,#c4c8d8 55%,#d4d8e8 100%)',
+    thunder:'linear-gradient(150deg,#8878a8 0%,#a098bc 55%,#bcb4d0 100%)',
+  };
+  const bgBase={
+    spring:'#f2e8f5',summer:'#deeeff',autumn:'#f8ecdc',winter:'#e0ecf8',
+    rain:'#d5dde8',snow:'#e2ecf8',fog:'#d8dbe3',cloudy:'#d4d8e4',thunder:'#cdc9de'
+  };
+  bg.style.background=grads[theme]||grads.spring;
+  document.documentElement.style.setProperty('--bg3',bgBase[theme]||'#f0efe9');
+
+  // 하늘 날씨 아이콘
+  addSkyIcon(bg,cond);
+  // 계절 나무숲
+  addTreeScene(bg,season);
+  // 날씨별 추가 요소
+  addWeatherExtra(bg,cond);
 }
-function show(id){['sc-lock','sc-loading','sc-app'].forEach(s=>document.getElementById(s).style.display=s===id?'block':'none');}
+
+function addSkyIcon(bg,cond){
+  // 맑음은 항상 노란 해 (계절 무관)
+  const icons={
+    clear:`<svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="55" cy="55" r="22" fill="#FFD040" opacity="0.92"/>
+      <g stroke="#FFB800" stroke-width="2.5" stroke-linecap="round">
+        <line x1="55" y1="28" x2="55" y2="20"/><line x1="55" y1="82" x2="55" y2="90"/>
+        <line x1="28" y1="55" x2="20" y2="55"/><line x1="82" y1="55" x2="90" y2="55"/>
+        <line x1="37" y1="37" x2="31" y2="31"/><line x1="73" y1="73" x2="79" y2="79"/>
+        <line x1="73" y1="37" x2="79" y2="31"/><line x1="37" y1="73" x2="31" y2="79"/>
+      </g>
+    </svg>`,
+    cloudy:`<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+      <path d="M175,85 C168,85 162,79 162,71 C162,63 168,57 176,57 C178,45 188,36 200,36 C212,36 222,45 224,57 C230,54 237,57 239,65 C241,73 235,81 227,82 Z" fill="#9898b0" opacity="0.75"/>
+      <path d="M100,90 C91,90 83,83 83,73 C83,63 91,56 100,56 C102,42 113,32 126,32 C139,32 150,42 152,56 C159,52 167,55 169,65 C171,75 164,84 154,85 Z" fill="#a0a0b8" opacity="0.82"/>
+    </svg>`,
+    rain:`<svg viewBox="0 0 180 140" xmlns="http://www.w3.org/2000/svg">
+      <path d="M155,72 C148,72 142,66 142,58 C142,50 148,44 156,44 C158,33 167,25 178,25 C189,25 198,33 200,44 C206,41 213,44 215,52 C217,60 211,68 203,69 Z" fill="#7090b0" opacity="0.78"/>
+      <g stroke="#6080a0" stroke-width="2.2" stroke-linecap="round" opacity="0.9">
+        <line x1="150" y1="82" x2="143" y2="102"/>
+        <line x1="168" y1="80" x2="161" y2="100"/>
+        <line x1="186" y1="82" x2="179" y2="102"/>
+        <line x1="204" y1="80" x2="197" y2="100"/>
+      </g>
+    </svg>`,
+    thunder:`<svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+      <path d="M160,70 C151,70 143,63 143,53 C143,43 151,36 161,36 C163,23 174,13 187,13 C200,13 211,23 213,36 C220,33 228,36 230,46 C232,56 225,65 215,66 Z" fill="#505478" opacity="0.85"/>
+      <polygon points="178,78 158,118 174,118 158,150 196,104 178,104 194,78" fill="#ffe840" opacity="0.9"/>
+      <polygon points="178,78 158,118 174,118 158,150 196,104 178,104 194,78" fill="none" stroke="#ffd000" stroke-width="1"/>
+    </svg>`,
+    snow:`<svg viewBox="0 0 180 110" xmlns="http://www.w3.org/2000/svg">
+      <path d="M150,68 C143,68 137,62 137,54 C137,46 143,40 151,40 C153,29 162,21 173,21 C184,21 193,29 195,40 C201,37 208,40 210,48 C212,56 206,64 198,65 Z" fill="#a0b8d0" opacity="0.72"/>
+    </svg>`,
+    fog:`<svg viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg">
+      <path d="M160,70 C151,70 144,63 144,54 C144,45 151,39 160,39 C162,28 172,20 184,20 C196,20 206,28 208,39 C215,36 222,40 224,49 C226,58 219,67 210,68 Z" fill="#9898b0" opacity="0.65"/>
+      <path d="M5,90 Q55,82 110,90 Q160,97 205,88" stroke="#9898a8" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.45"/>
+      <path d="M5,108 Q60,100 115,108 Q165,115 205,106" stroke="#9090a0" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.35"/>
+    </svg>`,
+  };
+  const icon=icons[cond]||icons.clear;
+  const pos={
+    clear:{top:'2%',right:'2%',w:'100px',h:'100px'},
+    cloudy:{top:'0',right:'-8px',w:'190px',h:'112px'},
+    rain:{top:'0',right:'0',w:'175px',h:'132px'},
+    thunder:{top:'0',right:'0',w:'195px',h:'152px'},
+    snow:{top:'2%',right:'0',w:'170px',h:'102px'},
+    fog:{top:'0',right:'0',w:'190px',h:'122px'},
+  }[cond]||{top:'2%',right:'2%',w:'100px',h:'100px'};
+  const el=document.createElement('div');
+  el.style.cssText=`position:absolute;top:${pos.top};right:${pos.right};width:${pos.w};height:${pos.h};opacity:0.28;pointer-events:none;`;
+  el.innerHTML=icon;bg.appendChild(el);
+}
+
+function addTreeScene(bg,season){
+  const trees={
+    spring:`<path d="M-5,183 C5,170 15,158 28,163 C36,167 42,157 52,150 C59,145 68,143 78,150 C85,155 91,149 100,143 C107,138 116,136 125,143 C132,148 138,142 147,136 C154,131 163,129 172,136 C179,141 185,135 194,129 C201,124 210,122 219,129 C226,134 232,128 241,122 C248,118 257,116 266,122 C272,126 278,120 285,115 L285,183 Z" fill="#c0a0b4" opacity="0.15"/>`,
+    summer:`<path d="M-5,183 C4,168 16,154 30,160 C38,164 44,153 56,146 C63,141 73,139 83,146 C90,151 96,145 106,139 C113,134 123,132 133,139 C140,144 146,138 156,132 C163,127 173,125 183,132 C190,137 196,131 206,125 C213,120 223,118 233,125 C240,130 246,124 256,118 C263,114 272,112 281,118 L285,122 L285,183 Z" fill="#3a6828" opacity="0.14"/>`,
+    autumn:`<path d="M-5,183 C6,173 14,163 24,160 C31,157 38,150 48,144 C55,139 64,137 74,143 C81,148 87,142 95,136 C102,131 111,129 120,135 C127,140 133,134 141,128 C148,123 157,121 165,127 C172,132 178,126 186,121 C193,117 202,115 210,121 C217,126 223,120 231,115 C238,111 247,109 256,115 C262,119 268,113 276,108 L285,112 L285,183 Z" fill="#904820" opacity="0.14"/>`,
+    winter:`<path d="M-5,183 L-5,158 L2,140 L8,155 L14,146 L20,126 L26,146 L32,155 L39,142 L45,122 L51,142 L57,152 L64,140 L70,119 L76,140 L82,149 L89,137 L95,116 L101,137 L107,146 L114,134 L120,113 L126,134 L132,143 L139,131 L145,110 L151,131 L157,140 L164,128 L170,108 L176,128 L182,137 L189,125 L195,105 L201,125 L207,134 L214,122 L220,102 L226,122 L232,131 L239,119 L245,99 L251,119 L257,128 L264,116 L270,96 L276,116 L282,125 L285,116 L285,183 Z" fill="#384830" opacity="0.14"/>
+      <path d="M-5,162 C8,157 17,159 26,157 C32,155 38,160 47,158 C53,156 60,161 68,159 C74,157 80,162 89,160 C95,158 101,162 110,161 L285,152 L285,167 Z" fill="white" opacity="0.18"/>`,
+  };
+  const ground={
+    spring:`<path d="M-5,188 L285,188 L285,183 C265,179 220,183 180,180 C140,177 80,183 -5,180 Z" fill="#c8d898" opacity="0.12"/>`,
+    summer:`<path d="M-5,188 L285,188 L285,183 C250,176 190,182 140,179 C90,176 30,182 -5,180 Z" fill="#5a9040" opacity="0.12"/>`,
+    autumn:`<path d="M-5,188 L285,188 L285,183 C255,178 195,183 150,180 C105,177 45,182 -5,180 Z" fill="#8b6020" opacity="0.1"/>`,
+    winter:`<path d="M-5,188 L285,188 L285,183 C250,179 190,182 140,180 C90,178 30,183 -5,181 Z" fill="#e8eef8" opacity="0.2"/>`,
+  };
+  const svgContent=`<svg viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet" style="width:100%;height:100%;">${trees[season]||trees.spring}${ground[season]||''}</svg>`;
+  const el=document.createElement('div');
+  el.style.cssText='position:absolute;bottom:0;left:0;width:100%;height:48%;pointer-events:none;';
+  el.innerHTML=svgContent;bg.appendChild(el);
+}
+
+function addWeatherExtra(bg,cond){
+  if(cond==='rain'){
+    const el=document.createElement('div');
+    el.style.cssText='position:absolute;bottom:0;right:0;width:160px;height:190px;opacity:0.24;pointer-events:none;';
+    el.innerHTML=`<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14,98 Q14,28 80,22 Q146,28 146,98 Z" fill="#6090c8" opacity="0.85"/>
+      <path d="M14,98 Q27,82 40,98 Q53,114 67,98 Q80,82 93,98 Q106,114 120,98 Q133,82 146,98" fill="#5080b8" opacity="0.9"/>
+      <g stroke="#4070a8" stroke-width="1.5" opacity="0.45">
+        <line x1="80" y1="98" x2="14" y2="98"/><line x1="80" y1="98" x2="36" y2="40"/>
+        <line x1="80" y1="98" x2="80" y2="22"/><line x1="80" y1="98" x2="124" y2="40"/>
+        <line x1="80" y1="98" x2="146" y2="98"/>
+      </g>
+      <line x1="80" y1="98" x2="80" y2="158" stroke="#3a6098" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M80,158 Q80,174 93,174 Q106,174 106,162" stroke="#3a6098" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+      <g stroke="#6090c8" stroke-width="2.5" stroke-linecap="round" opacity="0.7">
+        <line x1="28" y1="122" x2="21" y2="144"/><line x1="56" y1="126" x2="49" y2="148"/>
+        <line x1="110" y1="122" x2="103" y2="144"/><line x1="136" y1="126" x2="129" y2="148"/>
+      </g>
+    </svg>`;
+    bg.appendChild(el);
+  }else if(cond==='snow'){
+    const el=document.createElement('div');
+    el.style.cssText='position:absolute;bottom:0;right:0;width:150px;height:185px;opacity:0.22;pointer-events:none;';
+    el.innerHTML=`<svg viewBox="0 0 150 185" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="75" cy="150" r="32" fill="none" stroke="#a0c0e0" stroke-width="2"/>
+      <circle cx="75" cy="104" r="22" fill="none" stroke="#a0c0e0" stroke-width="2"/>
+      <circle cx="75" cy="68" r="16" fill="none" stroke="#a0c0e0" stroke-width="2"/>
+      <line x1="69" y1="64" x2="69" y2="64" stroke="#4488aa" stroke-width="4" stroke-linecap="round"/>
+      <line x1="81" y1="64" x2="81" y2="64" stroke="#4488aa" stroke-width="4" stroke-linecap="round"/>
+      <path d="M68,74 Q75,77 82,74" stroke="#5590aa" stroke-width="1.8" fill="none"/>
+      <rect x="61" y="47" width="28" height="20" rx="3" fill="#5580a0" opacity="0.8"/>
+      <rect x="54" y="50" width="42" height="6" rx="3" fill="#4470a0" opacity="0.8"/>
+      <path d="M57,86 Q75,91 93,86" stroke="#e05050" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <g stroke="#a8c8e8" stroke-linecap="round" stroke-width="1.8">
+        <line x1="18" y1="30" x2="18" y2="42"/><line x1="12" y1="36" x2="24" y2="36"/>
+        <line x1="14" y1="32" x2="22" y2="40"/><line x1="14" y1="40" x2="22" y2="32"/>
+        <line x1="125" y1="45" x2="125" y2="55"/><line x1="120" y1="50" x2="130" y2="50"/>
+        <line x1="121.5" y1="46.5" x2="128.5" y2="53.5"/><line x1="121.5" y1="53.5" x2="128.5" y2="46.5"/>
+        <line x1="38" y1="155" x2="38" y2="163"/><line x1="34" y1="159" x2="42" y2="159"/>
+        <line x1="35" y1="156" x2="41" y2="162"/><line x1="35" y1="162" x2="41" y2="156"/>
+      </g>
+    </svg>`;
+    bg.appendChild(el);
+  }
+}
 
 function init(){
   show('sc-lock');
   document.getElementById('lock-pw').focus();
   fetchWeather();
+  fetchWeather();
 }
 
+async function sha256(s){
+  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+'_wk25'));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+  catch{return btoa(s+'_wk25');}
+}
+function show(id){
+  ['sc-lock','sc-loading','sc-app'].forEach(s=>{
+    document.getElementById(s).style.display=s===id?'block':'none';
+  });
+}
+function getApiKey(){
+  return(typeof ANTHROPIC_KEY!=='undefined'&&ANTHROPIC_KEY)?ANTHROPIC_KEY:(localStorage.getItem('wk_api_key')||'');
+}
 async function unlock(){
   const pw=document.getElementById('lock-pw').value;
   const err=document.getElementById('lock-err');
