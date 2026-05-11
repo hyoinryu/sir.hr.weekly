@@ -338,23 +338,37 @@ function getCondition(code){
 async function fetchWeather(){
   const now=new Date();
   const days=['일','월','화','수','목','금','토'];
-  const el=document.getElementById('wx-date');
-  if(el)el.textContent=`${now.getMonth()+1}/${now.getDate()} (${days[now.getDay()]})`;
+  const dateEl=document.getElementById('wx-date');
+  const emojiEl=document.getElementById('wx-emoji');
+  const tempEl=document.getElementById('wx-temp');
+  if(dateEl)dateEl.textContent=`${now.getMonth()+1}/${now.getDate()} (${days[now.getDay()]})`;
   const season=getSeason(now.getMonth()+1);
+  // 계절 기본 이모지 먼저 표시
+  const defaultEmoji={spring:'🌸',summer:'☀️',autumn:'🍂',winter:'❄️'};
+  if(emojiEl)emojiEl.textContent=defaultEmoji[season]||'🌤️';
+  if(tempEl)tempEl.textContent='날씨 로딩중';
+  // 계절 배경 먼저 적용
+  applyWeatherBg('clear',season);
   try{
-    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia/Seoul');
-    if(!r.ok)throw new Error();
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),5000);
+    const r=await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia/Seoul',
+      {signal:controller.signal}
+    );
+    clearTimeout(timer);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const d=await r.json();
     const temp=Math.round(d.current.temperature_2m);
     const cond=getCondition(d.current.weather_code);
     const emojiKey=cond==='clear'?`clear_${season}`:cond;
-    const ee=document.getElementById('wx-emoji');
-    const et=document.getElementById('wx-temp');
-    if(ee)ee.textContent=WX_EMOJI[emojiKey]||'🌤️';
-    if(et)et.textContent=`${temp}°C`;
+    if(emojiEl)emojiEl.textContent=WX_EMOJI[emojiKey]||'🌤️';
+    if(tempEl)tempEl.textContent=`${temp}°C`;
     applyWeatherBg(cond,season);
-  }catch{
-    applyWeatherBg('clear',season);
+  }catch(err){
+    console.log('날씨 API 오류:',err.message);
+    if(tempEl)tempEl.textContent='';
+    // 계절 배경은 이미 적용됨
   }
 }
 
