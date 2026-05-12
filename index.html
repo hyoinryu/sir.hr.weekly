@@ -355,33 +355,48 @@ async function fetchWeather(){
   const tempEl=document.getElementById('wx-temp');
   if(dateEl)dateEl.textContent=`${now.getMonth()+1}/${now.getDate()} (${days[now.getDay()]})`;
   const season=getSeason(now.getMonth()+1);
-  // 계절 배경 먼저 즉시 적용
-  applyWeatherBg('clear',season);
   if(emojiEl)emojiEl.textContent='☀️';
-  if(tempEl)tempEl.textContent='--°C';
+  if(tempEl)tempEl.textContent='...';
+  applyWeatherBg('clear',season);
+
+  // 브라우저 현재 위치 요청
+  const getPos=()=>new Promise((res,rej)=>{
+    if(!navigator.geolocation){rej(new Error('위치 미지원'));return;}
+    navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,maximumAge:300000});
+  });
+
+  let lat=37.5665,lon=126.9780; // 기본값: 서울
   try{
-    const ctrl=new AbortController();
-    const t=setTimeout(()=>ctrl.abort(),6000);
+    const pos=await getPos();
+    lat=pos.coords.latitude;
+    lon=pos.coords.longitude;
+  }catch(e){
+    console.log('위치 권한 거부 또는 오류, 서울 기본값 사용:', e.message);
+  }
+
+  try{
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Seoul';
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),6000);
     const r=await fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia%2FSeoul&forecast_days=1',
-      {signal:ctrl.signal}
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(tz)}`,
+      {signal:controller.signal}
     );
-    clearTimeout(t);
-    if(!r.ok)throw new Error('API '+r.status);
+    clearTimeout(timer);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const d=await r.json();
     const temp=Math.round(d.current.temperature_2m);
     const cond=getCondition(d.current.weather_code);
-    const key=cond==='clear'?`clear_${season}`:cond;
-    if(emojiEl)emojiEl.textContent=WX_EMOJI[key]||'☀️';
-    if(tempEl)tempEl.textContent=temp+'°C';
+    const emojiKey=cond==='clear'?`clear_${season}`:cond;
+    if(emojiEl)emojiEl.textContent=WX_EMOJI[emojiKey]||'☀️';
+    if(tempEl)tempEl.textContent=`${temp}°C`;
     applyWeatherBg(cond,season);
-  }catch(e){
-    console.warn('날씨 로드 실패:',e.message);
+  }catch(err){
+    console.log('날씨 API 오류:',err.message);
     if(tempEl)tempEl.textContent='';
   }
 }
 
-/* ── 배경 적용 ── */
 function applyWeatherBg(cond,season){
   const bg=document.getElementById('wx-bg');
   if(!bg)return;
