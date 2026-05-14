@@ -1035,46 +1035,36 @@ async function rHist(){
   const c=document.getElementById('hw-list');
   c.innerHTML='<div class="eh">불러오는 중...</div>';
   try{
-    // shallow=true로 키만 먼저 가져오기 (빠르고 안정적)
-    const shallowUrl=FIREBASE_URL.replace(/\/$/,'')+'/weeks.json?shallow=true';
-    const r=await fetch(shallowUrl);
+    // allWeeks는 로그인 시 이미 로드됨 — 재요청 불필요
+    // Firebase에서 최신 주차 목록 다시 확인
+    const r=await fetch(weeksPath());
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    const keys=await r.json();
-    if(!keys){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
-    const sorted=Object.keys(keys).sort().reverse();
+    const all=await r.json();
+    if(!all){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
+    const sorted=Object.keys(all).sort().reverse();
     c.innerHTML='';
     if(!sorted.length){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
     const today=thisWeekKey(),next=getNextWeekKey();
-    // 각 주차 카드 먼저 렌더링 (클릭 가능하게)
     sorted.forEach(k=>{
+      const d=all[k]||{};
       const div=document.createElement('div');div.className='hw-card';
-      div.id='hwc-'+k;
       div.onclick=()=>{document.getElementById('week-sel').value=k;onWeekChange(k);sw('input');};
+      // 저장된 weekLabel 있으면 사용, 없으면 계산
+      const label=d.weekLabel||weekKeyToLabel(k);
+      const members=Array.isArray(d.members)?d.members:[];
+      const mc=members.filter(m=>hasCont(m)).length;
+      const upd=d.updated?new Date(d.updated).toLocaleDateString('ko-KR'):'';
       let tag='';
       if(k===today)tag='<span class="wbadge now" style="font-size:10px;">이번 주</span>';
       else if(k===next)tag='<span class="wbadge next" style="font-size:10px;">다음 주</span>';
       div.innerHTML=`<div>
-        <div style="font-size:14px;font-weight:600;">${weekKeyToLabel(k)}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:3px;" id="hwm-${k}">불러오는 중...</div>
+        <div style="font-size:14px;font-weight:600;">${label}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px;">${mc}명 입력${upd?' · '+upd:''}</div>
       </div>${tag}`;
       c.appendChild(div);
     });
-    // 각 주차 상세 정보 비동기로 채우기
-    sorted.forEach(async k=>{
-      try{
-        const wr=await fetch(dbPath(k));
-        if(!wr.ok)return;
-        const d=await wr.json();
-        const metaEl=document.getElementById('hwm-'+k);
-        if(!metaEl)return;
-        const members=d&&d.members?d.members:[];
-        const mc=members.filter(m=>hasCont(m)).length;
-        const upd=d&&d.updated?new Date(d.updated).toLocaleDateString('ko-KR'):'';
-        metaEl.textContent=`${mc}명 입력${upd?' · '+upd:''}`;
-      }catch{}
-    });
   }catch(e){
-    console.error('히스토리 로드 오류:',e);
+    console.error('히스토리 오류:',e);
     c.innerHTML='<div class="eh">로드 실패 — 새로고침 해보세요</div>';
   }
 }
