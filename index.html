@@ -639,7 +639,7 @@ function hasCont(m){return CATS.some(c=>m[`t_${c.id}`]||m[`n_${c.id}`])||m.notes
 async function loadAndShow(){
   show('sc-loading');
   const today=thisWeekKey(),next=getNextWeekKey();
-  try{const r=await fetch(weeksPath());if(r.ok){const d=await r.json();allWeeks=d?Object.keys(d).sort().reverse():[]; }}catch{allWeeks=[];}
+  try{const r=await fetch(FIREBASE_URL.replace(/\/$/,'')+'/weeks.json?shallow=true');if(r.ok){const d=await r.json();allWeeks=d?Object.keys(d).sort().reverse():[]; }}catch{allWeeks=[];}
   let defaultKey=today;
   if(allWeeks.includes(next)&&!allWeeks.includes(today))defaultKey=next;
   const isNew=!allWeeks.includes(today)&&defaultKey===today;
@@ -1031,42 +1031,32 @@ function timeAgo(date){
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HISTORY TAB
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function rHist(){
+function rHist(){
   const c=document.getElementById('hw-list');
-  c.innerHTML='<div class="eh">불러오는 중...</div>';
-  try{
-    // allWeeks는 로그인 시 이미 로드됨 — 재요청 불필요
-    // Firebase에서 최신 주차 목록 다시 확인
-    const r=await fetch(weeksPath());
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    const all=await r.json();
-    if(!all){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
-    const sorted=Object.keys(all).sort().reverse();
-    c.innerHTML='';
-    if(!sorted.length){c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';return;}
-    const today=thisWeekKey(),next=getNextWeekKey();
-    sorted.forEach(k=>{
-      const d=all[k]||{};
-      const div=document.createElement('div');div.className='hw-card';
-      div.onclick=()=>{document.getElementById('week-sel').value=k;onWeekChange(k);sw('input');};
-      // 저장된 weekLabel 있으면 사용, 없으면 계산
-      const label=d.weekLabel||weekKeyToLabel(k);
-      const members=Array.isArray(d.members)?d.members:[];
-      const mc=members.filter(m=>hasCont(m)).length;
-      const upd=d.updated?new Date(d.updated).toLocaleDateString('ko-KR'):'';
-      let tag='';
-      if(k===today)tag='<span class="wbadge now" style="font-size:10px;">이번 주</span>';
-      else if(k===next)tag='<span class="wbadge next" style="font-size:10px;">다음 주</span>';
-      div.innerHTML=`<div>
-        <div style="font-size:14px;font-weight:600;">${label}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:3px;">${mc}명 입력${upd?' · '+upd:''}</div>
-      </div>${tag}`;
-      c.appendChild(div);
-    });
-  }catch(e){
-    console.error('히스토리 오류:',e);
-    c.innerHTML='<div class="eh">로드 실패 — 새로고침 해보세요</div>';
+  c.innerHTML='';
+  // allWeeks는 로그인 시 이미 로드된 주차 키 목록
+  const keys=[...new Set([...allWeeks])].sort().reverse();
+  if(!keys.length){
+    c.innerHTML='<div class="eh" style="padding:8px 0;">아직 기록된 주차가 없습니다</div>';
+    return;
   }
+  const today=thisWeekKey(),next=getNextWeekKey();
+  keys.forEach(k=>{
+    const div=document.createElement('div');div.className='hw-card';
+    div.onclick=()=>{
+      document.getElementById('week-sel').value=k;
+      onWeekChange(k);
+      sw('input');
+    };
+    let tag='';
+    if(k===today)tag='<span class="wbadge now" style="font-size:10px;">이번 주</span>';
+    else if(k===next)tag='<span class="wbadge next" style="font-size:10px;">다음 주</span>';
+    div.innerHTML=`<div>
+      <div style="font-size:14px;font-weight:600;">${weekKeyToLabel(k)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:3px;">${k===curKey?'현재 보고 있는 주차':'클릭하면 불러와요'}</div>
+    </div>${tag}`;
+    c.appendChild(div);
+  });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
