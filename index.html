@@ -356,32 +356,19 @@ async function fetchWeather(){
   if(dateEl)dateEl.textContent=`${now.getMonth()+1}/${now.getDate()} (${days[now.getDay()]})`;
   const season=getSeason(now.getMonth()+1);
   if(emojiEl)emojiEl.textContent='☀️';
-  if(tempEl)tempEl.textContent='...';
+  if(tempEl)tempEl.textContent='';
   applyWeatherBg('clear',season);
-
-  // IP 기반 위치 → 날씨 (권한 팝업 없음)
-  let lat=37.5665,lon=126.9780;
   try{
-    const locR=await fetch('https://ipapi.co/json/');
-    if(locR.ok){
-      const loc=await locR.json();
-      if(loc.latitude&&loc.longitude){lat=loc.latitude;lon=loc.longitude;}
-    }
-  }catch(e){console.log('IP 위치 오류, 서울 기본값 사용');}
-
-  try{
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,weather_code&timezone=auto`;
-    const r=await fetch(url);
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,weather_code&timezone=Asia%2FSeoul');
+    if(!r.ok)throw new Error();
     const d=await r.json();
     const temp=Math.round(d.current.temperature_2m);
     const cond=getCondition(d.current.weather_code);
-    const emojiKey=cond==='clear'?`clear_${season}`:cond;
-    if(emojiEl)emojiEl.textContent=WX_EMOJI[emojiKey]||'☀️';
+    const key=cond==='clear'?`clear_${season}`:cond;
+    if(emojiEl)emojiEl.textContent=WX_EMOJI[key]||'☀️';
     if(tempEl)tempEl.textContent=`${temp}°C`;
     applyWeatherBg(cond,season);
-  }catch(err){
-    console.log('날씨 API 오류:',err.message);
+  }catch(e){
     if(tempEl)tempEl.textContent='';
   }
 }
