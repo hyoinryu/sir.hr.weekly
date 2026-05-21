@@ -311,10 +311,21 @@ const AV_FG   = ['#185FA5','#3B6D11','#854F0B','#993C1D'];
 // ── 상태
 let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null;
 
-// ── Firebase 경로
-const fbWeeksShallow = ()=> FB+'/weeks.json?shallow=true';
-const fbWeek  = k => FB+'/weeks/'+k+'.json';
-const fbAuth  = ()=> FB+'/weekly_auth.json';
+// ── Firebase DB 참조
+const _db = firebase.database(_fbApp);
+const dbWeeks    = () => _db.ref('weeks');
+const dbWeek     = k  => _db.ref('weeks/'+k);
+const dbAuth     = () => _db.ref('weekly_auth');
+
+// SDK 헬퍼: 읽기
+async function dbGet(ref){
+  const snap = await ref.get();
+  return snap.exists() ? snap.val() : null;
+}
+// SDK 헬퍼: 쓰기
+async function dbSet(ref, val){
+  await ref.set(val);
+}
 
 // ── 화면 전환
 function show(id){
@@ -382,9 +393,10 @@ async function unlock(){
   btn.disabled=true; btn.textContent='확인 중...'; err.textContent='';
   let ok=false;
   try{
-    const r=await fetch(fbAuth());
-    if(r.ok){ const d=await r.json(); if(d&&d.hash){ const h=await sha256(pw); ok=(h===d.hash); } }
-  }catch{}
+    await Promise.race([_authPromise, new Promise(r=>setTimeout(r,5000))]);
+    const d=await dbGet(dbAuth());
+    if(d&&d.hash){ const h=await sha256(pw); ok=(h===d.hash); }
+  }catch(e){ console.log('unlock 오류:',e); }
   if(!ok) ok=_ck(pw);
   if(ok){ await loadAndShow(); }
   else{ err.textContent='비밀번호가 올바르지 않습니다.'; document.getElementById('lock-pw').value=''; document.getElementById('lock-pw').focus(); }
@@ -405,21 +417,14 @@ window.addEventListener('beforeunload',e=>{ if(isDirty){e.preventDefault();e.ret
 // ── 앱 초기화
 async function loadAndShow(){
   show('sc-loading');
-  // 익명 인증 대기 (최대 5초, 완료 확인)
+  // 익명 인증 대기
   await Promise.race([_authPromise, new Promise(r=>setTimeout(r,5000))]);
-  // 인증 토큰 확보 후 요청
-  let token = '';
+  // Firebase SDK로 주차 목록 가져오기
   try{
-    const user = _fbAuth.currentUser;
-    if(user) token = await user.getIdToken();
-  }catch{}
-  // ★ shallow=true 로 주차 키만 가져옴
-  try{
-    const headers = token ? {'Authorization':'Bearer '+token} : {};
-    const r=await fetch(fbWeeksShallow(), {headers});
-    if(r.ok){ const d=await r.json(); allWeeks=d?Object.keys(d).sort().reverse():[]; }
+    const snap = await dbWeeks().get();
+    if(snap.exists()){ allWeeks = Object.keys(snap.val()).sort().reverse(); }
     else allWeeks=[];
-  }catch{ allWeeks=[]; }
+  }catch(e){ console.log('weeks 로드 오류:',e); allWeeks=[]; }
 
   const today=todayKey(), next=nextKey();
   let defKey=today;
@@ -438,20 +443,17 @@ async function loadAndShow(){
 
 async function loadWeek(key){
   try{
-    const r=await fetch(fbWeek(key));
-    if(r.ok){
-      const d=await r.json();
-      if(d){
-        const saved=Array.isArray(d.members)?d.members:[];
-        ms=MEMBERS.map((n,i)=>{
-          const f=saved.find(m=>m.name===n)||mkM(i+1,n);
-          f.id=i+1; f.name=n; return f;
-        });
-        ceo=d.ceo||'';
-        loadedAt=d.updated||null;
-      }else{ ms=dfltMs(); ceo=''; loadedAt=null; }
+    const d=await dbGet(dbWeek(key));
+    if(d){
+      const saved=Array.isArray(d.members)?d.members:[];
+      ms=MEMBERS.map((n,i)=>{
+        const f=saved.find(m=>m.name===n)||mkM(i+1,n);
+        f.id=i+1; f.name=n; return f;
+      });
+      ceo=d.ceo||'';
+      loadedAt=d.updated||null;
     }else{ ms=dfltMs(); ceo=''; loadedAt=null; }
-  }catch{ ms=dfltMs(); ceo=''; loadedAt=null; }
+  }catch(e){ console.log('loadWeek 오류:',e); ms=dfltMs(); ceo=''; loadedAt=null; }
   isDirty=false;
   const el=document.getElementById('ceo-in');
   if(el) el.value=ceo;
@@ -466,21 +468,18 @@ async function carryOver(){
   let carried=false;
   if(prevKey){
     try{
-      const r=await fetch(fbWeek(prevKey));
-      if(r.ok){
-        const d=await r.json();
-        if(d&&Array.isArray(d.members)){
-          MEMBERS.forEach((n,i)=>{
-            const prev=d.members.find(m=>m.name===n);
-            if(prev){ CATS.forEach(c=>{ nm[i]['t_'+c.id]=prev['n_'+c.id]||''; nm[i]['n_'+c.id]=''; }); nm[i].notes=''; carried=true; }
-          });
-        }
+      const d=await dbGet(dbWeek(prevKey));
+      if(d&&Array.isArray(d.members)){
+        MEMBERS.forEach((n,i)=>{
+          const prev=d.members.find(m=>m.name===n);
+          if(prev){ CATS.forEach(cat=>{ nm[i]['t_'+cat.id]=prev['n_'+cat.id]||''; nm[i]['n_'+cat.id]=''; }); nm[i].notes=''; carried=true; }
+        });
       }
-    }catch{}
+    }catch(e){ console.log('carryOver 오류:',e); }
   }
   ms=nm; ceo=''; isDirty=false; loadedAt=null;
   const payload={members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(curKey),history:[]};
-  await fetch(fbWeek(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await dbSet(dbWeek(curKey), payload);
   const el=document.getElementById('ceo-in');
   if(el) el.value='';
   document.getElementById('wk-lbl').textContent=weekLabel(curKey);
@@ -497,34 +496,28 @@ async function doSave(skipConflict=false){
   // 충돌 감지
   if(!skipConflict){
     try{
-      const r=await fetch(fbWeek(curKey));
-      if(r.ok){
-        const d=await r.json();
-        if(d&&d.updated&&loadedAt&&d.updated>loadedAt){
-          btn.disabled=false; setSt('⚠️ 충돌 감지');
-          document.getElementById('conflict-box').style.display='block';
-          openVer();
-          return;
-        }
+      const d=await dbGet(dbWeek(curKey));
+      if(d&&d.updated&&loadedAt&&d.updated>loadedAt){
+        btn.disabled=false; setSt('⚠️ 충돌 감지');
+        document.getElementById('conflict-box').style.display='block';
+        openVer();
+        return;
       }
     }catch{}
   }
   document.getElementById('conflict-box').style.display='none';
-  // 버전 히스토리 (최근 MAX_H개)
   let history=[];
   try{
-    const r=await fetch(fbWeek(curKey));
-    if(r.ok){ const d=await r.json(); history=(d&&Array.isArray(d.history))?d.history:[]; }
+    const d=await dbGet(dbWeek(curKey));
+    history=(d&&Array.isArray(d.history))?d.history:[];
   }catch{}
   history.unshift({saved:new Date().toISOString(),ceo,members:JSON.parse(JSON.stringify(ms))});
   if(history.length>MAX_H) history=history.slice(0,MAX_H);
   const now=new Date().toISOString();
   try{
-    const r=await fetch(fbWeek(curKey),{method:'PUT',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({members:ms,ceo,updated:now,weekLabel:weekLabel(curKey),history})});
-    if(r.ok){ loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000); }
-    else setSt('저장 실패');
-  }catch{ setSt('오프라인 — 저장 실패'); }
+    await dbSet(dbWeek(curKey),{members:ms,ceo,updated:now,weekLabel:weekLabel(curKey),history});
+    loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000);
+  }catch(e){ console.log('저장 오류:',e); setSt('저장 실패'); }
   btn.disabled=isRO;
 }
 
@@ -616,21 +609,17 @@ async function startNextWeek(){
   show('sc-loading');
   const nm=dfltMs();
   try{
-    const r=await fetch(fbWeek(curKey));
-    if(r.ok){
-      const d=await r.json();
-      if(d&&Array.isArray(d.members)){
-        MEMBERS.forEach((n,i)=>{
-          const prev=d.members.find(m=>m.name===n);
-          if(prev){ CATS.forEach(c=>{ nm[i]['t_'+c.id]=prev['n_'+c.id]||''; nm[i]['n_'+c.id]=''; }); nm[i].notes=''; }
-        });
-      }
+    const d=await dbGet(dbWeek(curKey));
+    if(d&&Array.isArray(d.members)){
+      MEMBERS.forEach((n,i)=>{
+        const prev=d.members.find(m=>m.name===n);
+        if(prev){ CATS.forEach(cat=>{ nm[i]['t_'+cat.id]=prev['n_'+cat.id]||''; nm[i]['n_'+cat.id]=''; }); nm[i].notes=''; }
+      });
     }
-  }catch{}
+  }catch(e){ console.log('startNextWeek 오류:',e); }
   curKey=next; ms=nm; ceo=''; isDirty=false;
   allWeeks.unshift(next);
-  await fetch(fbWeek(next),{method:'PUT',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(next),history:[]})});
+  await dbSet(dbWeek(next),{members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(next),history:[]});
   const ci=document.getElementById('ceo-in'); if(ci) ci.value='';
   document.getElementById('wk-lbl').textContent=weekLabel(next);
   render(); buildSel(); document.getElementById('week-sel').value=next; updateUI(next); show('sc-app');
@@ -756,9 +745,8 @@ function closeVer(){ document.getElementById('ver-panel').classList.remove('open
 async function loadVerList(){
   const list=document.getElementById('ver-list'); list.innerHTML='<div class="eh">불러오는 중...</div>';
   try{
-    const r=await fetch(fbWeek(curKey));
-    if(!r.ok){ list.innerHTML='<div class="eh">기록을 불러올 수 없어요.</div>'; return; }
-    const d=await r.json();
+    const d=await dbGet(dbWeek(curKey));
+    if(!d){ list.innerHTML='<div class="eh">기록을 불러올 수 없어요.</div>'; return; }
     const history=d&&Array.isArray(d.history)?d.history:[];
     if(!history.length){ list.innerHTML='<div class="eh">아직 저장 기록이 없어요.</div>'; return; }
     list.innerHTML='';
@@ -778,8 +766,7 @@ async function loadVerList(){
 async function restoreVer(idx){
   if(!confirm('이 버전으로 복원할까요?'))return;
   try{
-    const r=await fetch(fbWeek(curKey)); if(!r.ok)return;
-    const d=await r.json();
+    const d=await dbGet(dbWeek(curKey)); if(!d)return;
     const history=d&&Array.isArray(d.history)?d.history:[];
     const v=history[idx]; if(!v)return;
     const saved=Array.isArray(v.members)?v.members:[];
@@ -821,9 +808,9 @@ async function changePw(){
   msg.style.color='var(--text2)'; msg.textContent='변경 중...';
   try{
     const h=await sha256(p1);
-    const r=await fetch(fbAuth(),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({hash:h})});
-    msg.style.color=r.ok?'var(--green)':'var(--red)';
-    msg.textContent=r.ok?'변경 완료! 새 비밀번호를 팀원들에게 알려주세요.':'저장 실패.';
+    await dbSet(dbAuth(),{hash:h});
+    msg.style.color='var(--green)';
+    msg.textContent='변경 완료! 새 비밀번호를 팀원들에게 알려주세요.';
   }catch{ msg.style.color='var(--red)'; msg.textContent='오류가 발생했습니다.'; }
   document.getElementById('npw1').value=''; document.getElementById('npw2').value='';
 }
