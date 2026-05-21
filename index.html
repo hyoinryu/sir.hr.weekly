@@ -405,11 +405,18 @@ window.addEventListener('beforeunload',e=>{ if(isDirty){e.preventDefault();e.ret
 // ── 앱 초기화
 async function loadAndShow(){
   show('sc-loading');
-  // 익명 인증 대기 (최대 3초)
-  await Promise.race([_authPromise, new Promise(r=>setTimeout(r,3000))]);
-  // ★ shallow=true 로 주차 키만 가져옴 (데이터 크기 무관)
+  // 익명 인증 대기 (최대 5초, 완료 확인)
+  await Promise.race([_authPromise, new Promise(r=>setTimeout(r,5000))]);
+  // 인증 토큰 확보 후 요청
+  let token = '';
   try{
-    const r=await fetch(fbWeeksShallow());
+    const user = _fbAuth.currentUser;
+    if(user) token = await user.getIdToken();
+  }catch{}
+  // ★ shallow=true 로 주차 키만 가져옴
+  try{
+    const headers = token ? {'Authorization':'Bearer '+token} : {};
+    const r=await fetch(fbWeeksShallow(), {headers});
     if(r.ok){ const d=await r.json(); allWeeks=d?Object.keys(d).sort().reverse():[]; }
     else allWeeks=[];
   }catch{ allWeeks=[]; }
