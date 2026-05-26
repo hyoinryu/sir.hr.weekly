@@ -310,7 +310,7 @@ const AV_BG   = ['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
 const AV_FG   = ['#185FA5','#3B6D11','#854F0B','#993C1D'];
 
 // ── 상태
-let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null;
+let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null, loadedMs=null, loadedCeo='';
 
 // ── Firebase DB 참조
 const _db = firebase.database(_fbApp);
@@ -457,6 +457,8 @@ async function loadWeek(key){
     }else{ ms=dfltMs(); ceo=''; loadedAt=null; }
   }catch(e){ console.log('loadWeek 오류:',e); ms=dfltMs(); ceo=''; loadedAt=null; }
   isDirty=false;
+  loadedMs=JSON.parse(JSON.stringify(ms));
+  loadedCeo=ceo;
   const el=document.getElementById('ceo-in');
   if(el) el.value=ceo;
   document.getElementById('wk-lbl').textContent=weekLabel(key);
@@ -479,7 +481,7 @@ async function carryOver(){
       }
     }catch(e){ console.log('carryOver 오류:',e); }
   }
-  ms=nm; ceo=''; isDirty=false; loadedAt=null;
+  ms=nm; ceo=''; isDirty=false; loadedAt=null; loadedMs=JSON.parse(JSON.stringify(ms)); loadedCeo='';
   const payload={members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(curKey),history:[]};
   await dbSet(dbWeek(curKey), payload);
   const el=document.getElementById('ceo-in');
@@ -489,36 +491,60 @@ async function carryOver(){
   if(carried){ setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000); }
 }
 
-// ── 저장
-async function doSave(skipConflict=false){
+// ── 스마트 병합: 내가 수정한 필드만 내 버전, 나머지는 서버 버전 유지
+function mergeData(localMs,localCeo,serverData){
+  const serverMembers=Array.isArray(serverData.members)?serverData.members:[];
+  const orig=loadedMs||[];
+  const origCeo=loadedCeo||'';
+  const mergedMembers=MEMBERS.map((name,i)=>{
+    const local=localMs[i]||mkM(i+1,name);
+    const server=serverMembers.find(m=>m.name===name)||mkM(i+1,name);
+    const base=orig[i]||mkM(i+1,name);
+    const result={...server,id:i+1,name};
+    CATS.forEach(c=>{
+      if(local['t_'+c.id]!==base['t_'+c.id]) result['t_'+c.id]=local['t_'+c.id];
+      if(local['n_'+c.id]!==base['n_'+c.id]) result['n_'+c.id]=local['n_'+c.id];
+    });
+    if(local.notes!==base.notes) result.notes=local.notes;
+    return result;
+  });
+  const mergedCeo=(localCeo!==origCeo)?localCeo:(serverData.ceo||'');
+  return {members:mergedMembers,ceo:mergedCeo};
+}
+
+// ── 저장 (동시 저장 자동 병합)
+async function doSave(){
   if(isRO) return;
   collectVals();
   const btn=document.getElementById('save-btn');
   btn.disabled=true; setSt('저장 중...');
-  // 충돌 감지
-  if(!skipConflict){
-    try{
-      const d=await dbGet(dbWeek(curKey));
-      if(d&&d.updated&&loadedAt&&d.updated>loadedAt){
-        btn.disabled=false; setSt('⚠️ 충돌 감지');
-        document.getElementById('conflict-box').style.display='block';
-        openVer();
-        return;
-      }
-    }catch{}
-  }
-  document.getElementById('conflict-box').style.display='none';
-  let history=[];
+  let history=[],saveMs=ms,saveCeo=ceo,mergedFlag=false;
   try{
-    const d=await dbGet(dbWeek(curKey));
-    history=(d&&Array.isArray(d.history))?d.history:[];
-  }catch{}
-  history.unshift({saved:new Date().toISOString(),ceo,members:JSON.parse(JSON.stringify(ms))});
+    const serverData=await dbGet(dbWeek(curKey));
+    if(serverData){
+      history=Array.isArray(serverData.history)?serverData.history:[];
+      // 다른 사람이 먼저 저장했으면 → 스마트 병합
+      if(serverData.updated&&loadedAt&&serverData.updated>loadedAt){
+        const m=mergeData(ms,ceo,serverData);
+        saveMs=m.members; saveCeo=m.ceo; mergedFlag=true;
+      }
+    }
+  }catch(e){ console.log('save read 오류:',e); }
+  document.getElementById('conflict-box').style.display='none';
+  history.unshift({saved:new Date().toISOString(),ceo:saveCeo,members:JSON.parse(JSON.stringify(saveMs))});
   if(history.length>MAX_H) history=history.slice(0,MAX_H);
   const now=new Date().toISOString();
   try{
-    await dbSet(dbWeek(curKey),{members:ms,ceo,updated:now,weekLabel:weekLabel(curKey),history});
-    loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000);
+    await dbSet(dbWeek(curKey),{members:saveMs,ceo:saveCeo,updated:now,weekLabel:weekLabel(curKey),history});
+    ms=saveMs; ceo=saveCeo;
+    loadedAt=now; loadedMs=JSON.parse(JSON.stringify(ms)); loadedCeo=ceo;
+    isDirty=false;
+    if(mergedFlag){
+      const ci=document.getElementById('ceo-in'); if(ci) ci.value=ceo;
+      render();
+      setSt('저장 완료 · 다른 팀원 변경사항 자동 병합됨 ✓');
+    }else{ setSt('저장 완료 ✓'); }
+    setTimeout(()=>setSt(''),3500);
   }catch(e){ console.log('저장 오류:',e); setSt('저장 실패'); }
   btn.disabled=isRO;
 }
@@ -794,15 +820,22 @@ function timeAgo(date){
 async function checkCarryOver(){
   const hint=document.getElementById('co-hint');
   if(!hint)return;
-  // 읽기 전용이거나 이미 한 일 데이터가 있으면 숨김
-  if(isRO||ms.some(m=>CATS.some(c=>m['t_'+c.id]))){hint.style.display='none';return;}
+  if(isRO){hint.style.display='none';return;}
   // 이전 주 키 확인
   const prevKey=[...allWeeks].filter(k=>k!==curKey).sort().reverse()[0];
   if(!prevKey){hint.style.display='none';return;}
   try{
     const d=await dbGet(dbWeek(prevKey));
-    const hasPrev=d&&Array.isArray(d.members)&&d.members.some(m=>CATS.some(c=>m['n_'+c.id]));
-    if(hasPrev){hint.style.display='block';window._coData={key:prevKey,data:d};}
+    if(!d||!Array.isArray(d.members)){hint.style.display='none';return;}
+    // 핵심: 팀원별로 개별 체크 - 한 일이 비어있고 지난 주 할 일이 있는 팀원이 하나라도 있으면 버튼 표시
+    const hasPending=MEMBERS.some((name,i)=>{
+      const prevM=d.members.find(m=>m.name===name);
+      const currM=ms[i];
+      const hasPrevTodo=prevM&&CATS.some(c=>prevM['n_'+c.id]);
+      const hasCurrDone=currM&&CATS.some(c=>currM['t_'+c.id]);
+      return hasPrevTodo&&!hasCurrDone; // 지난 주 할 일 있고, 이번 주 한 일 비어있는 팀원
+    });
+    if(hasPending){hint.style.display='block';window._coData={key:prevKey,data:d};}
     else hint.style.display='none';
   }catch{hint.style.display='none';}
 }
@@ -811,9 +844,13 @@ async function importPrevTodo(){
   const co=window._coData;
   document.getElementById('co-hint').style.display='none';
   if(!co||!co.data||!Array.isArray(co.data.members))return;
+  // 핵심: 이미 한 일이 있는 팀원은 건드리지 않음 (허원희 데이터 보호)
   MEMBERS.forEach((n,i)=>{
     const prev=co.data.members.find(m=>m.name===n);
-    if(prev){CATS.forEach(cat=>{ms[i]['t_'+cat.id]=prev['n_'+cat.id]||'';});}
+    const hasCurrDone=ms[i]&&CATS.some(c=>ms[i]['t_'+c.id]);
+    if(prev&&!hasCurrDone){
+      CATS.forEach(cat=>{ms[i]['t_'+cat.id]=prev['n_'+cat.id]||'';});
+    }
   });
   render();
   isDirty=true;
