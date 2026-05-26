@@ -606,17 +606,29 @@ async function onWeekChange(key){
 async function startNextWeek(){
   const next=nextKey();
   if(allWeeks.includes(next)){ document.getElementById('week-sel').value=next; await onWeekChange(next); return; }
+
+  // 1) 현재 입력창 값 수집 (미저장 변경사항 포함)
+  collectVals();
   show('sc-loading');
-  const nm=dfltMs();
+
+  // 2) 이번 주 먼저 저장 (데이터 보존)
   try{
-    const d=await dbGet(dbWeek(curKey));
-    if(d&&Array.isArray(d.members)){
-      MEMBERS.forEach((n,i)=>{
-        const prev=d.members.find(m=>m.name===n);
-        if(prev){ CATS.forEach(cat=>{ nm[i]['t_'+cat.id]=prev['n_'+cat.id]||''; nm[i]['n_'+cat.id]=''; }); nm[i].notes=''; }
-      });
-    }
-  }catch(e){ console.log('startNextWeek 오류:',e); }
+    const now=new Date().toISOString();
+    const existing=await dbGet(dbWeek(curKey));
+    let history=(existing&&Array.isArray(existing.history))?existing.history:[];
+    history.unshift({saved:now,ceo,members:JSON.parse(JSON.stringify(ms))});
+    if(history.length>MAX_H) history=history.slice(0,MAX_H);
+    await dbSet(dbWeek(curKey),{members:ms,ceo,updated:now,weekLabel:weekLabel(curKey),history});
+    loadedAt=now; isDirty=false;
+  }catch(e){ console.log('startNextWeek 저장 오류:',e); }
+
+  // 3) 이번 주 할 일 → 다음 주 한 일로 복사 (in-memory ms 사용 → 미저장 포함)
+  const nm=dfltMs();
+  MEMBERS.forEach((n,i)=>{
+    const prev=ms.find(m=>m.name===n);
+    if(prev){ CATS.forEach(cat=>{ nm[i]['t_'+cat.id]=prev['n_'+cat.id]||''; nm[i]['n_'+cat.id]=''; }); nm[i].notes=''; }
+  });
+
   curKey=next; ms=nm; ceo=''; isDirty=false;
   allWeeks.unshift(next);
   await dbSet(dbWeek(next),{members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(next),history:[]});
