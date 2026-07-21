@@ -223,7 +223,6 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
         <button class="btn-nw" id="nw-btn" style="display:none;" onclick="startNextWeek()">다음 주 미리 작성</button>
       </div>
       <div class="nw-hint" id="nw-hint" style="display:none;">목~일요일에 다음 주 보고서를 미리 작성할 수 있어요.</div>
-      <div class="nw-hint" id="co-hint" style="display:none;">💡 지난 주 <b>할 일</b>을 이번 주 <b>한 일</b>로 <button onclick="importPrevTodo()" style="color:var(--blue);font-weight:700;background:none;border:none;cursor:pointer;font-size:11px;font-family:inherit;padding:0;text-decoration:underline;">가져오기 →</button></div>
     </div>
     <div class="banner ro" id="ban-ro" style="display:none;">과거 주차는 읽기 전용입니다.</div>
     <div class="banner nw" id="ban-nw" style="display:none;">다음 주 보고서를 미리 작성 중이에요.</div>
@@ -310,7 +309,7 @@ const AV_BG   = ['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
 const AV_FG   = ['#185FA5','#3B6D11','#854F0B','#993C1D'];
 
 // ── 상태
-let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null, loadedMs=null, loadedCeo='';
+let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null;
 
 // ── Firebase DB 참조
 const _db = firebase.database(_fbApp);
@@ -440,7 +439,6 @@ async function loadAndShow(){
   buildSel();
   show('sc-app');
   fetchWeather();
-  checkCarryOver();
 }
 
 async function loadWeek(key){
@@ -457,8 +455,6 @@ async function loadWeek(key){
     }else{ ms=dfltMs(); ceo=''; loadedAt=null; }
   }catch(e){ console.log('loadWeek 오류:',e); ms=dfltMs(); ceo=''; loadedAt=null; }
   isDirty=false;
-  loadedMs=JSON.parse(JSON.stringify(ms));
-  loadedCeo=ceo;
   const el=document.getElementById('ceo-in');
   if(el) el.value=ceo;
   document.getElementById('wk-lbl').textContent=weekLabel(key);
@@ -481,7 +477,7 @@ async function carryOver(){
       }
     }catch(e){ console.log('carryOver 오류:',e); }
   }
-  ms=nm; ceo=''; isDirty=false; loadedAt=null; loadedMs=JSON.parse(JSON.stringify(ms)); loadedCeo='';
+  ms=nm; ceo=''; isDirty=false; loadedAt=null;
   const payload={members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(curKey),history:[]};
   await dbSet(dbWeek(curKey), payload);
   const el=document.getElementById('ceo-in');
@@ -491,60 +487,36 @@ async function carryOver(){
   if(carried){ setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000); }
 }
 
-// ── 스마트 병합: 내가 수정한 필드만 내 버전, 나머지는 서버 버전 유지
-function mergeData(localMs,localCeo,serverData){
-  const serverMembers=Array.isArray(serverData.members)?serverData.members:[];
-  const orig=loadedMs||[];
-  const origCeo=loadedCeo||'';
-  const mergedMembers=MEMBERS.map((name,i)=>{
-    const local=localMs[i]||mkM(i+1,name);
-    const server=serverMembers.find(m=>m.name===name)||mkM(i+1,name);
-    const base=orig[i]||mkM(i+1,name);
-    const result={...server,id:i+1,name};
-    CATS.forEach(c=>{
-      if(local['t_'+c.id]!==base['t_'+c.id]) result['t_'+c.id]=local['t_'+c.id];
-      if(local['n_'+c.id]!==base['n_'+c.id]) result['n_'+c.id]=local['n_'+c.id];
-    });
-    if(local.notes!==base.notes) result.notes=local.notes;
-    return result;
-  });
-  const mergedCeo=(localCeo!==origCeo)?localCeo:(serverData.ceo||'');
-  return {members:mergedMembers,ceo:mergedCeo};
-}
-
-// ── 저장 (동시 저장 자동 병합)
-async function doSave(){
+// ── 저장
+async function doSave(skipConflict=false){
   if(isRO) return;
   collectVals();
   const btn=document.getElementById('save-btn');
   btn.disabled=true; setSt('저장 중...');
-  let history=[],saveMs=ms,saveCeo=ceo,mergedFlag=false;
-  try{
-    const serverData=await dbGet(dbWeek(curKey));
-    if(serverData){
-      history=Array.isArray(serverData.history)?serverData.history:[];
-      // 다른 사람이 먼저 저장했으면 → 스마트 병합
-      if(serverData.updated&&loadedAt&&serverData.updated>loadedAt){
-        const m=mergeData(ms,ceo,serverData);
-        saveMs=m.members; saveCeo=m.ceo; mergedFlag=true;
+  // 충돌 감지
+  if(!skipConflict){
+    try{
+      const d=await dbGet(dbWeek(curKey));
+      if(d&&d.updated&&loadedAt&&d.updated>loadedAt){
+        btn.disabled=false; setSt('⚠️ 충돌 감지');
+        document.getElementById('conflict-box').style.display='block';
+        openVer();
+        return;
       }
-    }
-  }catch(e){ console.log('save read 오류:',e); }
+    }catch{}
+  }
   document.getElementById('conflict-box').style.display='none';
-  history.unshift({saved:new Date().toISOString(),ceo:saveCeo,members:JSON.parse(JSON.stringify(saveMs))});
+  let history=[];
+  try{
+    const d=await dbGet(dbWeek(curKey));
+    history=(d&&Array.isArray(d.history))?d.history:[];
+  }catch{}
+  history.unshift({saved:new Date().toISOString(),ceo,members:JSON.parse(JSON.stringify(ms))});
   if(history.length>MAX_H) history=history.slice(0,MAX_H);
   const now=new Date().toISOString();
   try{
-    await dbSet(dbWeek(curKey),{members:saveMs,ceo:saveCeo,updated:now,weekLabel:weekLabel(curKey),history});
-    ms=saveMs; ceo=saveCeo;
-    loadedAt=now; loadedMs=JSON.parse(JSON.stringify(ms)); loadedCeo=ceo;
-    isDirty=false;
-    if(mergedFlag){
-      const ci=document.getElementById('ceo-in'); if(ci) ci.value=ceo;
-      render();
-      setSt('저장 완료 · 다른 팀원 변경사항 자동 병합됨 ✓');
-    }else{ setSt('저장 완료 ✓'); }
-    setTimeout(()=>setSt(''),3500);
+    await dbSet(dbWeek(curKey),{members:ms,ceo,updated:now,weekLabel:weekLabel(curKey),history});
+    loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000);
   }catch(e){ console.log('저장 오류:',e); setSt('저장 실패'); }
   btn.disabled=isRO;
 }
@@ -559,7 +531,6 @@ async function forceRefresh(){
   updateUI(curKey);
   show('sc-app');
   setSt('최신 버전으로 새로고침됐어요'); setTimeout(()=>setSt(''),3000);
-  checkCarryOver();
 }
 
 async function doRefresh(){
@@ -571,7 +542,6 @@ async function doRefresh(){
   updateUI(curKey);
   show('sc-app');
   setSt('새로고침 완료'); setTimeout(()=>setSt(''),2000);
-  checkCarryOver();
 }
 
 function dirty(){ isDirty=true; setSt('미저장 변경사항 있음'); }
@@ -628,7 +598,6 @@ async function onWeekChange(key){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 이동하시겠어요?')){ document.getElementById('week-sel').value=curKey; return; }
   show('sc-loading'); curKey=key;
   await loadWeek(key); updateUI(key); show('sc-app');
-  checkCarryOver();
   const active=['input','ceo','history','settings'].find((_,i)=>document.getElementById('t'+(i+1))?.className.includes('on'));
   if(active==='ceo') rCeo();
   if(active==='history') rHist();
@@ -816,47 +785,6 @@ function timeAgo(date){
   return `${Math.floor(diff/86400)}일 전`;
 }
 
-// ── 지난 주 할 일 가져오기
-async function checkCarryOver(){
-  const hint=document.getElementById('co-hint');
-  if(!hint)return;
-  if(isRO){hint.style.display='none';return;}
-  // 이전 주 키 확인
-  const prevKey=[...allWeeks].filter(k=>k!==curKey).sort().reverse()[0];
-  if(!prevKey){hint.style.display='none';return;}
-  try{
-    const d=await dbGet(dbWeek(prevKey));
-    if(!d||!Array.isArray(d.members)){hint.style.display='none';return;}
-    // 핵심: 팀원별로 개별 체크 - 한 일이 비어있고 지난 주 할 일이 있는 팀원이 하나라도 있으면 버튼 표시
-    const hasPending=MEMBERS.some((name,i)=>{
-      const prevM=d.members.find(m=>m.name===name);
-      const currM=ms[i];
-      const hasPrevTodo=prevM&&CATS.some(c=>prevM['n_'+c.id]);
-      const hasCurrDone=currM&&CATS.some(c=>currM['t_'+c.id]);
-      return hasPrevTodo&&!hasCurrDone; // 지난 주 할 일 있고, 이번 주 한 일 비어있는 팀원
-    });
-    if(hasPending){hint.style.display='block';window._coData={key:prevKey,data:d};}
-    else hint.style.display='none';
-  }catch{hint.style.display='none';}
-}
-
-async function importPrevTodo(){
-  const co=window._coData;
-  document.getElementById('co-hint').style.display='none';
-  if(!co||!co.data||!Array.isArray(co.data.members))return;
-  // 핵심: 이미 한 일이 있는 팀원은 건드리지 않음 (허원희 데이터 보호)
-  MEMBERS.forEach((n,i)=>{
-    const prev=co.data.members.find(m=>m.name===n);
-    const hasCurrDone=ms[i]&&CATS.some(c=>ms[i]['t_'+c.id]);
-    if(prev&&!hasCurrDone){
-      CATS.forEach(cat=>{ms[i]['t_'+cat.id]=prev['n_'+cat.id]||'';});
-    }
-  });
-  render();
-  isDirty=true;
-  setSt('지난 주 할 일 → 이번 주 한 일로 이동됐어요. 저장해주세요. ✓');
-}
-
 // ── 복사
 function cpAll(btn){
   collectVals();
@@ -965,34 +893,73 @@ function addSkyIcon(bg,cond){
 }
 
 function addTrees(bg,season){
-  // 좌측 나무
   const L=document.createElement('div');
-  L.style.cssText='position:absolute;bottom:0;left:0;width:22%;height:75%;pointer-events:none;opacity:0.55;';
-  // 우측 나무
+  L.style.cssText='position:absolute;bottom:0;left:0;width:22%;height:80%;pointer-events:none;';
   const R=document.createElement('div');
-  R.style.cssText='position:absolute;bottom:0;right:0;width:22%;height:75%;pointer-events:none;opacity:0.55;';
+  R.style.cssText='position:absolute;bottom:0;right:0;width:22%;height:80%;pointer-events:none;';
 
-  const svgs={
-    spring:{
-      l:'<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><rect x="54" y="160" width="10" height="100" rx="3" fill="#7a5028"/><circle cx="58" cy="130" r="48" fill="#f0a8c0"/><circle cx="30" cy="155" r="34" fill="#f4b8cc"/><circle cx="86" cy="148" r="36" fill="#eca0bc"/><rect x="8" y="185" width="8" height="75" rx="3" fill="#7a5028"/><circle cx="12" cy="158" r="38" fill="#f2aac2"/><circle cx="-5" cy="178" r="28" fill="#f5b5ca"/><circle cx="32" cy="170" r="30" fill="#e898b5"/></svg>',
-      r:'<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><rect x="56" y="155" width="10" height="105" rx="3" fill="#7a5028"/><circle cx="62" cy="125" r="46" fill="#f0a8c0"/><circle cx="36" cy="150" r="33" fill="#eca0bc"/><circle cx="90" cy="145" r="35" fill="#f4b8cc"/><rect x="102" y="182" width="8" height="78" rx="3" fill="#7a5028"/><circle cx="108" cy="155" r="36" fill="#f2aac2"/><circle cx="90" cy="175" r="27" fill="#e898b5"/><circle cx="120" cy="170" r="26" fill="#f5b5ca"/></svg>',
-    },
-    summer:{
-      l:'<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><rect x="54" y="155" width="11" height="105" rx="3" fill="#3a2010"/><circle cx="59" cy="122" r="52" fill="#3a8030"/><circle cx="28" cy="150" r="36" fill="#4a9040"/><circle cx="90" cy="145" r="38" fill="#2a7028"/><rect x="6" y="180" width="9" height="80" rx="3" fill="#3a2010"/><circle cx="10" cy="150" r="42" fill="#358530"/><circle cx="-6" cy="172" r="30" fill="#459038"/><circle cx="30" cy="165" r="32" fill="#287025"/></svg>',
-      r:'<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><rect x="55" y="150" width="11" height="110" rx="3" fill="#3a2010"/><circle cx="60" cy="118" r="50" fill="#3a8030"/><circle cx="32" cy="146" r="35" fill="#2a7028"/><circle cx="92" cy="142" r="37" fill="#4a9040"/><rect x="100" y="178" width="9" height="82" rx="3" fill="#3a2010"/><circle cx="106" cy="148" r="40" fill="#358530"/><circle cx="88" cy="170" r="29" fill="#287025"/><circle cx="120" cy="165" r="28" fill="#459038"/></svg>',
-    },
-    autumn:{
-      l:'<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><rect x="54" y="158" width="10" height="102" rx="3" fill="#5a2010"/><circle cx="58" cy="126" r="50" fill="#d45810"/><circle cx="29" cy="152" r="35" fill="#e06818"/><circle cx="88" cy="147" r="37" fill="#c04808"/><rect x="7" y="182" width="8" height="78" rx="3" fill="#5a2010"/><circle cx="11" cy="153" r="40" fill="#e06018"/><circle cx="-4" cy="175" r="29" fill="#d05010"/><circle cx="31" cy="168" r="31" fill="#c84808"/></svg>',
-      r:'<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><rect x="56" y="153" width="10" height="107" rx="3" fill="#5a2010"/><circle cx="61" cy="122" r="48" fill="#d45810"/><circle cx="34" cy="148" r="34" fill="#c04808"/><circle cx="91" cy="144" r="36" fill="#e06818"/><rect x="101" y="180" width="8" height="80" rx="3" fill="#5a2010"/><circle cx="107" cy="152" r="38" fill="#e06018"/><circle cx="89" cy="173" r="28" fill="#c84808"/><circle cx="119" cy="167" r="27" fill="#d05010"/></svg>',
-    },
-    winter:{
-      l:'<svg viewBox="0 0 120 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><rect x="55" y="200" width="8" height="80" rx="2" fill="#3a2010"/><polygon points="59,80 30,148 88,148" fill="#2a4020"/><polygon points="59,80 33,140 85,140" fill="rgba(255,255,255,0.45)"/><polygon points="59,115 25,185 93,185" fill="#2a4020"/><polygon points="59,115 28,177 90,177" fill="rgba(255,255,255,0.38)"/><rect x="10" y="215" width="7" height="65" rx="2" fill="#3a2010"/><polygon points="13,100 -10,165 36,165" fill="#2a4020"/><polygon points="13,100 -8,157 34,157" fill="rgba(255,255,255,0.42)"/><polygon points="13,132 -14,198 40,198" fill="#2a4020"/><polygon points="13,132 -12,190 38,190" fill="rgba(255,255,255,0.35)"/><path d="M-10,240 Q30,230 70,238 Q100,244 120,236 L120,260 L-10,260 Z" fill="white" opacity="0.5"/></svg>',
-      r:'<svg viewBox="0 0 120 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><rect x="57" y="195" width="8" height="85" rx="2" fill="#3a2010"/><polygon points="61,75 32,145 90,145" fill="#2a4020"/><polygon points="61,75 35,137 87,137" fill="rgba(255,255,255,0.45)"/><polygon points="61,110 27,182 95,182" fill="#2a4020"/><polygon points="61,110 30,174 92,174" fill="rgba(255,255,255,0.38)"/><rect x="103" y="210" width="7" height="70" rx="2" fill="#3a2010"/><polygon points="107,95 84,162 130,162" fill="#2a4020"/><polygon points="107,95 86,154 128,154" fill="rgba(255,255,255,0.42)"/><polygon points="107,128 80,195 134,195" fill="#2a4020"/><polygon points="107,128 82,187 132,187" fill="rgba(255,255,255,0.35)"/><path d="M0,238 Q40,228 80,235 Q105,241 130,233 L130,260 L0,260 Z" fill="white" opacity="0.5"/></svg>',
-    },
+  function springTree(x,y,r,op){
+    let s=`<rect x="${x-5}" y="${y}" width="10" height="${r*1.1}" rx="4" fill="#8B5E3C" opacity="${op}"/>`;
+    s+=`<line x1="${x}" y1="${y+r*0.4}" x2="${x-r*0.55}" y2="${y-r*0.1}" stroke="#8B5E3C" stroke-width="5" stroke-linecap="round" opacity="${op}"/>`;
+    s+=`<line x1="${x}" y1="${y+r*0.4}" x2="${x+r*0.55}" y2="${y-r*0.1}" stroke="#8B5E3C" stroke-width="5" stroke-linecap="round" opacity="${op}"/>`;
+    s+=`<line x1="${x}" y1="${y+r*0.1}" x2="${x-r*0.3}" y2="${y-r*0.5}" stroke="#8B5E3C" stroke-width="3" stroke-linecap="round" opacity="${op}"/>`;
+    s+=`<line x1="${x}" y1="${y+r*0.1}" x2="${x+r*0.3}" y2="${y-r*0.5}" stroke="#8B5E3C" stroke-width="3" stroke-linecap="round" opacity="${op}"/>`;
+    [[x,y-r*0.7,r*0.55],[x-r*0.52,y-r*0.15,r*0.4],[x+r*0.52,y-r*0.15,r*0.4],[x-r*0.28,y-r*0.52,r*0.35],[x+r*0.28,y-r*0.52,r*0.35],[x,y-r*1.1,r*0.3]].forEach(function(cl){
+      s+=`<circle cx="${cl[0]}" cy="${cl[1]}" r="${cl[2]}" fill="#f9c8d8" opacity="${op*0.9}"/>`;
+      s+=`<circle cx="${cl[0]}" cy="${cl[1]}" r="${cl[2]*0.6}" fill="#f5aac0" opacity="${op*0.6}"/>`;
+    });
+    [[x-r*0.6,y+r*1.3],[x-r*0.1,y+r*1.15],[x+r*0.4,y+r*1.25]].forEach(function(p){
+      s+=`<ellipse cx="${p[0]}" cy="${p[1]}" rx="5" ry="3" fill="#f9c8d8" opacity="${op*0.6}"/>`;
+    });
+    return s;
+  }
+
+  function summerTree(x,y,r,op){
+    let s=`<rect x="${x-6}" y="${y}" width="12" height="${r*1.1}" rx="4" fill="#6B4423" opacity="${op}"/>`;
+    [[x,y-r*0.55,r*0.72,'#2d8a3e'],[x-r*0.42,y-r*0.2,r*0.55,'#3a9e4a'],[x+r*0.42,y-r*0.2,r*0.55,'#2d8a3e'],[x,y-r*1.0,r*0.5,'#3a9e4a'],[x-r*0.22,y-r*0.78,r*0.45,'#48b55a'],[x+r*0.22,y-r*0.78,r*0.45,'#2d8a3e'],[x,y-r*0.3,r*0.6,'#48b55a']].forEach(function(cl){
+      s+=`<circle cx="${cl[0]}" cy="${cl[1]}" r="${cl[2]}" fill="${cl[3]}" opacity="${op}"/>`;
+    });
+    s+=`<circle cx="${x-r*0.15}" cy="${y-r*0.75}" r="${r*0.22}" fill="#7de890" opacity="${op*0.5}"/>`;
+    return s;
+  }
+
+  function autumnTree(x,y,r,op){
+    let s=`<rect x="${x-6}" y="${y}" width="12" height="${r*1.1}" rx="4" fill="#7a4520" opacity="${op}"/>`;
+    [[x,y-r*0.55,r*0.7,'#d4580a'],[x-r*0.42,y-r*0.2,r*0.54,'#e8721a'],[x+r*0.42,y-r*0.2,r*0.54,'#c04008'],[x,y-r*1.0,r*0.48,'#e8880a'],[x-r*0.22,y-r*0.78,r*0.44,'#f0a020'],[x+r*0.22,y-r*0.78,r*0.44,'#d4580a'],[x,y-r*0.28,r*0.58,'#e8721a']].forEach(function(cl){
+      s+=`<circle cx="${cl[0]}" cy="${cl[1]}" r="${cl[2]}" fill="${cl[3]}" opacity="${op}"/>`;
+    });
+    [[x-r*0.5,y+r*0.9,'#e8721a'],[x+r*0.3,y+r*1.1,'#d4580a'],[x-r*0.1,y+r*1.3,'#f0a020'],[x+r*0.6,y+r*0.7,'#c04008']].forEach(function(p){
+      s+=`<ellipse cx="${p[0]}" cy="${p[1]}" rx="7" ry="5" fill="${p[2]}" opacity="${op*0.75}"/>`;
+    });
+    return s;
+  }
+
+  function winterTree(x,y,r,op){
+    let s=`<rect x="${x-5}" y="${y}" width="10" height="${r*1.0}" rx="3" fill="#8B6347" opacity="${op}"/>`;
+    [[x,y+r*0.2,x-r*0.7,y-r*0.4,6],[x,y+r*0.2,x+r*0.7,y-r*0.4,6],[x,y-r*0.1,x-r*0.5,y-r*0.7,4],[x,y-r*0.1,x+r*0.5,y-r*0.7,4],[x,y-r*0.4,x-r*0.3,y-r*0.9,3],[x,y-r*0.4,x+r*0.3,y-r*0.9,3],[x-r*0.7,y-r*0.4,x-r*0.9,y-r*0.65,2],[x+r*0.7,y-r*0.4,x+r*0.9,y-r*0.65,2],[x-r*0.5,y-r*0.7,x-r*0.65,y-r*0.95,1.8],[x+r*0.5,y-r*0.7,x+r*0.65,y-r*0.95,1.8],[x,y-r*0.8,x-r*0.18,y-r*1.1,1.5],[x,y-r*0.8,x+r*0.18,y-r*1.1,1.5]].forEach(function(b){
+      s+=`<line x1="${b[0]}" y1="${b[1]}" x2="${b[2]}" y2="${b[3]}" stroke="#8B6347" stroke-width="${b[4]}" stroke-linecap="round" opacity="${op}"/>`;
+    });
+    [[x-r*0.7,y-r*0.4],[x+r*0.7,y-r*0.4],[x-r*0.5,y-r*0.7],[x+r*0.5,y-r*0.7]].forEach(function(p){
+      s+=`<ellipse cx="${p[0]}" cy="${p[1]}" rx="9" ry="4" fill="white" opacity="${op*0.7}"/>`;
+    });
+    return s;
+  }
+
+  var tl={
+    spring:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><path d="M0,290 Q80,272 160,286 L160,320 L0,320 Z" fill="#b8d878" opacity="0.55"/>'+springTree(100,168,85,0.72)+springTree(28,222,58,0.58)+'</svg>',
+    summer:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><path d="M0,286 Q80,268 160,282 L160,320 L0,320 Z" fill="#4a9030" opacity="0.5"/>'+summerTree(100,162,88,0.76)+summerTree(26,218,60,0.6)+'</svg>',
+    autumn:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><path d="M0,286 Q80,270 160,284 L160,320 L0,320 Z" fill="#c07818" opacity="0.42"/>'+autumnTree(100,165,86,0.74)+autumnTree(28,220,58,0.6)+'</svg>',
+    winter:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet"><path d="M0,282 Q80,266 160,280 L160,320 L0,320 Z" fill="white" opacity="0.52"/>'+winterTree(100,170,90,0.7)+winterTree(28,222,60,0.55)+'</svg>',
   };
-  const s=svgs[season]||svgs.spring;
-  L.innerHTML=s.l;
-  R.innerHTML=s.r;
+  var tr={
+    spring:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><path d="M0,286 Q80,272 160,290 L160,320 L0,320 Z" fill="#b8d878" opacity="0.55"/>'+springTree(60,168,85,0.72)+springTree(132,222,58,0.58)+'</svg>',
+    summer:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><path d="M0,282 Q80,268 160,286 L160,320 L0,320 Z" fill="#4a9030" opacity="0.5"/>'+summerTree(60,162,88,0.76)+summerTree(134,218,60,0.6)+'</svg>',
+    autumn:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><path d="M0,284 Q80,270 160,286 L160,320 L0,320 Z" fill="#c07818" opacity="0.42"/>'+autumnTree(60,165,86,0.74)+autumnTree(132,220,58,0.6)+'</svg>',
+    winter:'<svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet"><path d="M0,280 Q80,266 160,282 L160,320 L0,320 Z" fill="white" opacity="0.52"/>'+winterTree(60,170,90,0.7)+winterTree(132,222,60,0.55)+'</svg>',
+  };
+
+  L.innerHTML=tl[season]||tl.spring;
+  R.innerHTML=tr[season]||tr.spring;
   bg.appendChild(L);
   bg.appendChild(R);
 }
