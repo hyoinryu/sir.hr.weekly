@@ -7,7 +7,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#fff;--bg2:#f7f6f3;--bg3:#f0efe9;
+  --bg:#fff;--bg2:#f7f6f3;--bg3:#f0efe9;오후 3:01 07-21(화)
   --text:#1a1a18;--text2:#6b6a65;--text3:#9c9a92;
   --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
   --green:#1D9E75;--red:#A32D2D;--blue:#185FA5;
@@ -140,6 +140,12 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
 .ldd:nth-child(2){animation-delay:.18s;}
 .ldd:nth-child(3){animation-delay:.36s;}
 @keyframes pulse{0%,80%,100%{transform:scale(.55)}40%{transform:scale(1)}}
+@keyframes rainFallSky{0%{transform:translateY(-16px);opacity:0;}10%{opacity:.9;}90%{opacity:.8;}100%{transform:translateY(115vh);opacity:0;}}
+.rain-drop{position:absolute;width:2px;border-radius:2px;background:linear-gradient(to bottom,rgba(120,160,210,0),rgba(90,140,200,.7));animation:rainFallSky linear infinite;pointer-events:none;}
+@keyframes sunCorePulse{0%,100%{opacity:.9;transform:scale(1);}50%{opacity:1;transform:scale(1.1);}}
+@keyframes sunRayShine{0%,100%{opacity:.5;}50%{opacity:1;}}
+.sun-core{animation:sunCorePulse 2.2s ease-in-out infinite;transform-origin:55px 55px;}
+.sun-ray{animation:sunRayShine 1.6s ease-in-out infinite;}
 </style>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -319,8 +325,10 @@ async function dbSet(ref, val){
 }
 // ── 화면 전환
 function show(id){
+  // sc-lock/sc-loading 은 .center(display:flex)로 가운데 정렬되므로 켤 때도 flex를 써야 한다
+  const disp={'sc-lock':'flex','sc-loading':'flex','sc-app':'block'};
   ['sc-lock','sc-loading','sc-app'].forEach(s=>{
-    document.getElementById(s).style.display = s===id ? 'block' : 'none';
+    document.getElementById(s).style.display = s===id ? disp[s] : 'none';
   });
 }
 // ── 비밀번호 해시
@@ -818,6 +826,25 @@ function applyBg(cond,season){
   addTrees(bg,season);
   // 날씨별 요소 (우하단)
   addWxExtra(bg,cond);
+  // 비 오는 날: 화면 전체에 빗방울이 떨어지는 효과
+  if(cond==='rain'||cond==='thunder') addRainDrops(bg);
+}
+function addRainDrops(bg){
+  if(!bg) return;
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0;';
+  for(let i=0;i<26;i++){
+    const d=document.createElement('div');
+    const h=14+Math.random()*14;
+    d.className='rain-drop';
+    d.style.left=Math.random()*100+'%';
+    d.style.top=(-20-Math.random()*100)+'px';
+    d.style.height=h+'px';
+    d.style.animationDuration=(1.4+Math.random()*1.0)+'s';
+    d.style.animationDelay=(Math.random()*1.4)+'s';
+    wrap.appendChild(d);
+  }
+  bg.appendChild(wrap);
 }
 function addSkyIcon(bg,cond){
   const pos={
@@ -832,7 +859,7 @@ function addSkyIcon(bg,cond){
   const el=document.createElement('div');
   el.style.cssText=`position:absolute;top:${p.t};right:${p.r};width:${p.w};height:${p.h};opacity:0.55;pointer-events:none;`;
   const icons={
-    clear:'<svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><circle cx="55" cy="55" r="22" fill="#FFD040" opacity="0.92"/><g stroke="#FFB800" stroke-width="2.5" stroke-linecap="round"><line x1="55" y1="28" x2="55" y2="20"/><line x1="55" y1="82" x2="55" y2="90"/><line x1="28" y1="55" x2="20" y2="55"/><line x1="82" y1="55" x2="90" y2="55"/><line x1="37" y1="37" x2="31" y2="31"/><line x1="73" y1="73" x2="79" y2="79"/><line x1="73" y1="37" x2="79" y2="31"/><line x1="37" y1="73" x2="31" y2="79"/></g></svg>',
+    clear:'<svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><circle class="sun-core" cx="55" cy="55" r="22" fill="#FFD040" opacity="0.92"/><g stroke="#FFB800" stroke-width="2.5" stroke-linecap="round"><line class="sun-ray" style="animation-delay:0s" x1="55" y1="28" x2="55" y2="20"/><line class="sun-ray" style="animation-delay:.2s" x1="55" y1="82" x2="55" y2="90"/><line class="sun-ray" style="animation-delay:.4s" x1="28" y1="55" x2="20" y2="55"/><line class="sun-ray" style="animation-delay:.6s" x1="82" y1="55" x2="90" y2="55"/><line class="sun-ray" style="animation-delay:.8s" x1="37" y1="37" x2="31" y2="31"/><line class="sun-ray" style="animation-delay:1s" x1="73" y1="73" x2="79" y2="79"/><line class="sun-ray" style="animation-delay:1.2s" x1="73" y1="37" x2="79" y2="31"/><line class="sun-ray" style="animation-delay:1.4s" x1="37" y1="73" x2="31" y2="79"/></g></svg>',
     cloudy:'<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M175,85 C168,85 162,79 162,71 C162,63 168,57 176,57 C178,45 188,36 200,36 C212,36 222,45 224,57 C230,54 237,57 239,65 C241,73 235,81 227,82 Z" fill="#9898b0" opacity="0.75"/><path d="M100,90 C91,90 83,83 83,73 C83,63 91,56 100,56 C102,42 113,32 126,32 C139,32 150,42 152,56 C159,52 167,55 169,65 C171,75 164,84 154,85 Z" fill="#a0a0b8" opacity="0.82"/></svg>',
     rain:'<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M14,98 Q14,28 80,22 Q146,28 146,98 Z" fill="#6090c8" opacity="0.85"/><path d="M14,98 Q27,82 40,98 Q53,114 67,98 Q80,82 93,98 Q106,114 120,98 Q133,82 146,98" fill="#5080b8" opacity="0.9"/><g stroke="#4070a8" stroke-width="1.5" opacity="0.45"><line x1="80" y1="98" x2="14" y2="98"/><line x1="80" y1="98" x2="36" y2="40"/><line x1="80" y1="98" x2="80" y2="22"/><line x1="80" y1="98" x2="124" y2="40"/><line x1="80" y1="98" x2="146" y2="98"/></g><line x1="80" y1="98" x2="80" y2="158" stroke="#3a6098" stroke-width="5.5" stroke-linecap="round"/><path d="M80,158 Q80,174 93,174 Q106,174 106,162" stroke="#3a6098" stroke-width="5.5" fill="none" stroke-linecap="round"/></svg>',
     thunder:'<svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M160,70 C151,70 143,63 143,53 C143,43 151,36 161,36 C163,23 174,13 187,13 C200,13 211,23 213,36 C220,33 228,36 230,46 C232,56 225,65 215,66 Z" fill="#505478" opacity="0.85"/><polygon points="178,78 158,118 174,118 158,150 196,104 178,104 194,78" fill="#ffe840" opacity="0.9"/></svg>',
@@ -913,7 +940,7 @@ function addTrees(bg,season){
   // 1) 화면 전체 폭으로 이어지는 동산 (가운데가 살짝 솟아 나무 세 그루를 자연스럽게 받쳐준다)
   const ground=document.createElement('div');
   ground.style.cssText='position:fixed;left:0;bottom:0;width:100%;height:60px;pointer-events:none;';
-  ground.innerHTML=`<svg viewBox="0 0 1000 60" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width:100%;height:100%;"><path d="M0,40 Q500,12 1000,40 L1000,60 L0,60 Z" fill="${gc}" opacity="${go}"/></svg>`;
+  ground.innerHTML=`<svg viewBox="0 0 1000 60" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width:100%;height:100%;"><path d="M0,40 Q500,-30 1000,40 L1000,60 L0,60 Z" fill="${gc}" opacity="${go}"/></svg>`;
   bg.appendChild(ground);
 
   // 2) 왼쪽 나무 군집 (큰 나무 + 작은 나무) — 옆이 잘리지 않도록 박스를 나무 크기에 맞춰 넉넉히 잡는다
@@ -934,10 +961,10 @@ function addTrees(bg,season){
 
   // 4) 가운데 나무 한 그루 — 동산을 이어주는 역할. 로그인/로딩 화면에선 보이고,
   //    앱 화면에서는 가운데 정렬된 콘텐츠(.page)에 자연스럽게 가려진다
-  GY=513;
-  const centerSvg=`<svg viewBox="0 0 380 513" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">${fn(190,190,0.68)}</svg>`;
+  GY=648;
+  const centerSvg=`<svg viewBox="0 0 480 648" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">${fn(240,240,0.68)}</svg>`;
   const center=document.createElement('div');
-  center.style.cssText='position:fixed;left:50%;bottom:40px;width:380px;height:513px;pointer-events:none;transform:translateX(-50%);';
+  center.style.cssText='position:fixed;left:50%;bottom:40px;width:480px;height:648px;pointer-events:none;transform:translateX(-50%);';
   center.innerHTML=centerSvg;
   bg.appendChild(center);
 }
