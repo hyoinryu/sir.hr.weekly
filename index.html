@@ -148,7 +148,6 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
 </head>
 <body>
 <div id="wx-bg"></div>
-
 <!-- 잠금 화면 -->
 <div id="sc-lock" class="center" style="display:none;">
   <div class="auth-logo">HR Weekly</div>
@@ -162,13 +161,11 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
     <div class="auth-note">이 링크와 비밀번호는 팀 내부에서만 공유해주세요.</div>
   </div>
 </div>
-
 <!-- 로딩 화면 -->
 <div id="sc-loading" class="center" style="display:none;">
   <div class="ld"><div class="ldd"></div><div class="ldd"></div><div class="ldd"></div></div>
   <div style="font-size:13px;color:var(--text2);margin-top:12px;">불러오는 중...</div>
 </div>
-
 <!-- 버전 히스토리 패널 -->
 <div class="ver-overlay" id="ver-overlay" onclick="closeVer()"></div>
 <div class="ver-panel" id="ver-panel">
@@ -187,7 +184,6 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
     <div id="ver-list"></div>
   </div>
 </div>
-
 <!-- 메인 앱 -->
 <div id="sc-app" style="display:none;">
   <div class="page">
@@ -283,11 +279,9 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
     </div>
   </div>
 </div>
-
 <script>
 // ── 상수
 const FB   = 'https://sirloinhr-default-rtdb.asia-southeast1.firebasedatabase.app';
-
 // Firebase 초기화 & 익명 인증
 const _fbApp = firebase.initializeApp({
   apiKey: "AIzaSyDYikN7ttxI7guzqijsppNwVIJMNZPtQLw",
@@ -307,16 +301,13 @@ const LEAD    = '류효인';
 const MAX_H   = 10;
 const AV_BG   = ['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
 const AV_FG   = ['#185FA5','#3B6D11','#854F0B','#993C1D'];
-
 // ── 상태
 let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null;
-
 // ── Firebase DB 참조
 const _db = firebase.database(_fbApp);
 const dbWeeks    = () => _db.ref('weeks');
 const dbWeek     = k  => _db.ref('weeks/'+k);
 const dbAuth     = () => _db.ref('weekly_auth');
-
 // SDK 헬퍼: 읽기
 async function dbGet(ref){
   const snap = await ref.get();
@@ -326,14 +317,12 @@ async function dbGet(ref){
 async function dbSet(ref, val){
   await ref.set(val);
 }
-
 // ── 화면 전환
 function show(id){
   ['sc-lock','sc-loading','sc-app'].forEach(s=>{
     document.getElementById(s).style.display = s===id ? 'block' : 'none';
   });
 }
-
 // ── 비밀번호 해시
 async function sha256(s){
   try{
@@ -341,11 +330,9 @@ async function sha256(s){
     return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
   }catch{ return btoa(s+'_wk25'); }
 }
-
 // hardcoded fallback: "sirhr0905"
 const _D=[126,125,105,74,91,0,14,14,112];
 function _ck(pw){ return pw.length===_D.length && [...pw].every((c,i)=>(c.charCodeAt(0)^(i*7+13))===_D[i]); }
-
 // ── 주차 키 계산
 function weekKey(offset=0){
   const d=new Date(); if(offset) d.setDate(d.getDate()+offset*7);
@@ -358,7 +345,6 @@ function weekKey(offset=0){
 }
 const todayKey = ()=>weekKey(0);
 const nextKey  = ()=>weekKey(1);
-
 function weekLabel(key){
   const [yr,wp]=key.split('_');
   const wn=parseInt(wp.replace('W',''));
@@ -370,7 +356,6 @@ function weekLabel(key){
   const f=x=>`${x.getMonth()+1}/${x.getDate()}`;
   return `${mon.getFullYear()}년 ${mon.getMonth()+1}월 ${Math.ceil(mon.getDate()/7)}주차 (${f(mon)} ~ ${f(fri)})`;
 }
-
 // ── 기본 데이터
 function mkM(id,name){
   const m={id,name,notes:''};
@@ -379,11 +364,9 @@ function mkM(id,name){
 }
 function dfltMs(){ return MEMBERS.map((n,i)=>mkM(i+1,n)); }
 function hasCont(m){ return CATS.some(c=>m['t_'+c.id]||m['n_'+c.id])||m.notes; }
-
 // ── textarea 높이 자동조절
 function autoResize(el){ el.style.height='auto'; el.style.height=(el.scrollHeight+2)+'px'; }
 function initResize(){ document.querySelectorAll('textarea').forEach(el=>{ autoResize(el); el.addEventListener('input',()=>autoResize(el)); }); }
-
 // ── 잠금/해제
 async function unlock(){
   const pw=document.getElementById('lock-pw').value;
@@ -402,7 +385,6 @@ async function unlock(){
   else{ err.textContent='비밀번호가 올바르지 않습니다.'; document.getElementById('lock-pw').value=''; document.getElementById('lock-pw').focus(); }
   btn.disabled=false; btn.textContent='입장하기';
 }
-
 function doLock(){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 잠금하시겠어요?'))return;
   show('sc-lock');
@@ -411,9 +393,7 @@ function doLock(){
   document.getElementById('lock-pw').focus();
   isDirty=false;
 }
-
 window.addEventListener('beforeunload',e=>{ if(isDirty){e.preventDefault();e.returnValue='';} });
-
 // ── 앱 초기화
 async function loadAndShow(){
   show('sc-loading');
@@ -425,22 +405,18 @@ async function loadAndShow(){
     if(snap.exists()){ allWeeks = Object.keys(snap.val()).sort().reverse(); }
     else allWeeks=[];
   }catch(e){ console.log('weeks 로드 오류:',e); allWeeks=[]; }
-
   const today=todayKey(), next=nextKey();
   let defKey=today;
   if(allWeeks.includes(next)&&!allWeeks.includes(today)) defKey=next;
   const isNew=!allWeeks.includes(today)&&defKey===today;
   if(!allWeeks.includes(defKey)) allWeeks.unshift(defKey);
   curKey=defKey;
-
   if(isNew){ await carryOver(); }
   else{ await loadWeek(curKey); }
-
   buildSel();
   show('sc-app');
   fetchWeather();
 }
-
 async function loadWeek(key){
   try{
     const d=await dbGet(dbWeek(key));
@@ -461,7 +437,6 @@ async function loadWeek(key){
   render();
   setSt('');
 }
-
 async function carryOver(){
   const nm=dfltMs();
   const prevKey=[...allWeeks].filter(k=>k!==curKey).sort().reverse()[0];
@@ -486,7 +461,6 @@ async function carryOver(){
   render();
   if(carried){ setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000); }
 }
-
 // ── 저장
 async function doSave(skipConflict=false){
   if(isRO) return;
@@ -520,7 +494,6 @@ async function doSave(skipConflict=false){
   }catch(e){ console.log('저장 오류:',e); setSt('저장 실패'); }
   btn.disabled=isRO;
 }
-
 async function forceRefresh(){
   document.getElementById('conflict-box').style.display='none';
   closeVer();
@@ -532,7 +505,6 @@ async function forceRefresh(){
   show('sc-app');
   setSt('최신 버전으로 새로고침됐어요'); setTimeout(()=>setSt(''),3000);
 }
-
 async function doRefresh(){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 새로고침하면 사라져요. 계속할까요?'))return;
   show('sc-loading');
@@ -543,10 +515,8 @@ async function doRefresh(){
   show('sc-app');
   setSt('새로고침 완료'); setTimeout(()=>setSt(''),2000);
 }
-
 function dirty(){ isDirty=true; setSt('미저장 변경사항 있음'); }
 function setSt(s){ const el=document.getElementById('sv-st'); if(el) el.textContent=s; }
-
 function collectVals(){
   const ci=document.getElementById('ceo-in'); if(ci) ceo=ci.value;
   ms.forEach(m=>{
@@ -557,7 +527,6 @@ function collectVals(){
     const tn=document.getElementById(`ta_notes_${m.id}`); if(tn) m.notes=tn.value;
   });
 }
-
 // ── 주차 선택기
 function buildSel(){
   const sel=document.getElementById('week-sel'); sel.innerHTML='';
@@ -572,7 +541,6 @@ function buildSel(){
   sel.value=curKey;
   updateUI(curKey);
 }
-
 function updateUI(key){
   const today=todayKey(), next=nextKey();
   isRO=(key!==today&&key!==next);
@@ -593,7 +561,6 @@ function updateUI(key){
   if(saveBtn) saveBtn.disabled=isRO;
   setTimeout(()=>{ document.querySelectorAll('#pg-input textarea').forEach(el=>el.disabled=isRO); },50);
 }
-
 async function onWeekChange(key){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 이동하시겠어요?')){ document.getElementById('week-sel').value=curKey; return; }
   show('sc-loading'); curKey=key;
@@ -602,7 +569,6 @@ async function onWeekChange(key){
   if(active==='ceo') rCeo();
   if(active==='history') rHist();
 }
-
 async function startNextWeek(){
   const next=nextKey();
   if(allWeeks.includes(next)){ document.getElementById('week-sel').value=next; await onWeekChange(next); return; }
@@ -625,7 +591,6 @@ async function startNextWeek(){
   render(); buildSel(); document.getElementById('week-sel').value=next; updateUI(next); show('sc-app');
   setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000);
 }
-
 // ── 렌더링
 function render(){
   const c=document.getElementById('mc'); c.innerHTML='';
@@ -653,12 +618,10 @@ function render(){
   });
   setTimeout(initResize,50);
 }
-
 function updDot(id){
   const f=CATS.some(c=>document.getElementById(`ta_t_${c.id}_${id}`)?.value||document.getElementById(`ta_n_${c.id}_${id}`)?.value)||document.getElementById(`ta_notes_${id}`)?.value;
   const dot=document.getElementById('dot-'+id); if(dot) dot.className='dot'+(f?' on':'');
 }
-
 // ── 탭 전환
 function sw(tab){
   const map={input:1,ceo:2,history:3,settings:4};
@@ -669,7 +632,6 @@ function sw(tab){
   if(tab==='ceo'){ collectVals(); rCeo(); }
   if(tab==='history') rHist();
 }
-
 // ── 대표님 뷰
 function rCeo(){
   const ceo_vw=document.getElementById('ceo-vw');
@@ -717,7 +679,6 @@ function rCeo(){
     d.innerHTML=h; tw.appendChild(d);
   });
 }
-
 // ── 히스토리 탭 (allWeeks 직접 사용 — 추가 Firebase 요청 없음)
 function rHist(){
   const c=document.getElementById('hw-list'); c.innerHTML='';
@@ -737,11 +698,9 @@ function rHist(){
     c.appendChild(div);
   });
 }
-
 // ── 버전 히스토리 패널
 function openVer(){ document.getElementById('ver-panel').classList.add('open'); document.getElementById('ver-overlay').classList.add('open'); loadVerList(); }
 function closeVer(){ document.getElementById('ver-panel').classList.remove('open'); document.getElementById('ver-overlay').classList.remove('open'); }
-
 async function loadVerList(){
   const list=document.getElementById('ver-list'); list.innerHTML='<div class="eh">불러오는 중...</div>';
   try{
@@ -762,7 +721,6 @@ async function loadVerList(){
     });
   }catch{ list.innerHTML='<div class="eh">오류가 발생했어요.</div>'; }
 }
-
 async function restoreVer(idx){
   if(!confirm('이 버전으로 복원할까요?'))return;
   try{
@@ -776,7 +734,6 @@ async function restoreVer(idx){
     render(); closeVer(); isDirty=true; setSt('복원됐어요. 저장 버튼을 눌러 확정해주세요.');
   }catch{ alert('복원에 실패했어요.'); }
 }
-
 function timeAgo(date){
   const diff=Math.floor((Date.now()-date)/1000);
   if(diff<60)return `${diff}초 전`;
@@ -784,7 +741,6 @@ function timeAgo(date){
   if(diff<86400)return `${Math.floor(diff/3600)}시간 전`;
   return `${Math.floor(diff/86400)}일 전`;
 }
-
 // ── 복사
 function cpAll(btn){
   collectVals();
@@ -798,7 +754,6 @@ function cpAll(btn){
   });
   navigator.clipboard.writeText(t).then(()=>{ const o=btn.textContent; btn.textContent='복사됨!'; setTimeout(()=>btn.textContent=o,1500); });
 }
-
 // ── 설정 (비밀번호 변경)
 async function changePw(){
   const p1=document.getElementById('npw1').value, p2=document.getElementById('npw2').value;
@@ -814,12 +769,10 @@ async function changePw(){
   }catch{ msg.style.color='var(--red)'; msg.textContent='오류가 발생했습니다.'; }
   document.getElementById('npw1').value=''; document.getElementById('npw2').value='';
 }
-
 // ── 날씨
 function getSeason(m){ if(m>=3&&m<=5)return'spring'; if(m>=6&&m<=8)return'summer'; if(m>=9&&m<=11)return'autumn'; return'winter'; }
 function getCond(code){ if(code<=1)return'clear'; if(code<=3)return'cloudy'; if(code<=48)return'fog'; if(code<=82)return'rain'; if(code<=86)return'snow'; if(code>=95)return'thunder'; return'cloudy'; }
 const WX_EMOJI={clear:'☀️',cloudy:'☁️',fog:'🌫️',rain:'🌧️',snow:'🌨️',thunder:'⛈️'};
-
 async function fetchWeather(){
   const now=new Date();
   const days=['일','월','화','수','목','금','토'];
@@ -843,7 +796,6 @@ async function fetchWeather(){
     if(tmpEl) tmpEl.textContent='';
   }
 }
-
 function applyBg(cond,season){
   const bg=document.getElementById('wx-bg'); if(!bg)return;
   bg.innerHTML='';
@@ -867,12 +819,11 @@ function applyBg(cond,season){
   // 날씨별 요소 (우하단)
   addWxExtra(bg,cond);
 }
-
 function addSkyIcon(bg,cond){
   const pos={
     clear:{t:'2%',r:'2%',w:'100px',h:'100px'},
     cloudy:{t:'0',r:'-5px',w:'210px',h:'115px'},
-    rain:{t:'0',r:'0',w:'175px',h:'135px'},
+    rain:{t:'0',r:'3%',w:'135px',h:'160px'},
     thunder:{t:'0',r:'0',w:'195px',h:'155px'},
     snow:{t:'2%',r:'0',w:'170px',h:'105px'},
     fog:{t:'0',r:'-5px',w:'205px',h:'125px'}
@@ -883,7 +834,7 @@ function addSkyIcon(bg,cond){
   const icons={
     clear:'<svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><circle cx="55" cy="55" r="22" fill="#FFD040" opacity="0.92"/><g stroke="#FFB800" stroke-width="2.5" stroke-linecap="round"><line x1="55" y1="28" x2="55" y2="20"/><line x1="55" y1="82" x2="55" y2="90"/><line x1="28" y1="55" x2="20" y2="55"/><line x1="82" y1="55" x2="90" y2="55"/><line x1="37" y1="37" x2="31" y2="31"/><line x1="73" y1="73" x2="79" y2="79"/><line x1="73" y1="37" x2="79" y2="31"/><line x1="37" y1="73" x2="31" y2="79"/></g></svg>',
     cloudy:'<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M175,85 C168,85 162,79 162,71 C162,63 168,57 176,57 C178,45 188,36 200,36 C212,36 222,45 224,57 C230,54 237,57 239,65 C241,73 235,81 227,82 Z" fill="#9898b0" opacity="0.75"/><path d="M100,90 C91,90 83,83 83,73 C83,63 91,56 100,56 C102,42 113,32 126,32 C139,32 150,42 152,56 C159,52 167,55 169,65 C171,75 164,84 154,85 Z" fill="#a0a0b8" opacity="0.82"/></svg>',
-    rain:'<svg viewBox="0 0 180 140" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M155,72 C148,72 142,66 142,58 C142,50 148,44 156,44 C158,33 167,25 178,25 C189,25 198,33 200,44 C206,41 213,44 215,52 C217,60 211,68 203,69 Z" fill="#7090b0" opacity="0.78"/><g stroke="#6080a0" stroke-width="2.2" stroke-linecap="round" opacity="0.9"><line x1="150" y1="82" x2="143" y2="102"/><line x1="168" y1="80" x2="161" y2="100"/><line x1="186" y1="82" x2="179" y2="102"/><line x1="204" y1="80" x2="197" y2="100"/></g></svg>',
+    rain:'<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M14,98 Q14,28 80,22 Q146,28 146,98 Z" fill="#6090c8" opacity="0.85"/><path d="M14,98 Q27,82 40,98 Q53,114 67,98 Q80,82 93,98 Q106,114 120,98 Q133,82 146,98" fill="#5080b8" opacity="0.9"/><g stroke="#4070a8" stroke-width="1.5" opacity="0.45"><line x1="80" y1="98" x2="14" y2="98"/><line x1="80" y1="98" x2="36" y2="40"/><line x1="80" y1="98" x2="80" y2="22"/><line x1="80" y1="98" x2="124" y2="40"/><line x1="80" y1="98" x2="146" y2="98"/></g><line x1="80" y1="98" x2="80" y2="158" stroke="#3a6098" stroke-width="5.5" stroke-linecap="round"/><path d="M80,158 Q80,174 93,174 Q106,174 106,162" stroke="#3a6098" stroke-width="5.5" fill="none" stroke-linecap="round"/></svg>',
     thunder:'<svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M160,70 C151,70 143,63 143,53 C143,43 151,36 161,36 C163,23 174,13 187,13 C200,13 211,23 213,36 C220,33 228,36 230,46 C232,56 225,65 215,66 Z" fill="#505478" opacity="0.85"/><polygon points="178,78 158,118 174,118 158,150 196,104 178,104 194,78" fill="#ffe840" opacity="0.9"/></svg>',
     snow:'<svg viewBox="0 0 180 110" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M150,68 C143,68 137,62 137,54 C137,46 143,40 151,40 C153,29 162,21 173,21 C184,21 193,29 195,40 C201,37 208,40 210,48 C212,56 206,64 198,65 Z" fill="#a0b8d0" opacity="0.72"/></svg>',
     fog:'<svg viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M160,70 C151,70 144,63 144,54 C144,45 151,39 160,39 C162,28 172,20 184,20 C196,20 206,28 208,39 C215,36 222,40 224,49 C226,58 219,67 210,68 Z" fill="#9898b0" opacity="0.65"/><path d="M5,90 Q55,82 110,90 Q160,97 205,88" stroke="#9898a8" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.45"/><path d="M5,108 Q60,100 115,108 Q165,115 205,106" stroke="#9090a0" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.35"/></svg>',
@@ -891,21 +842,18 @@ function addSkyIcon(bg,cond){
   el.innerHTML=icons[cond]||icons.clear;
   bg.appendChild(el);
 }
-
 function addTrees(bg,season){
+  const TREE_SCALE=4.5; // 나무 크기 배율 (기존 대비 약 4.5배)
   const L=document.createElement('div');
-  L.style.cssText='position:absolute;bottom:0;left:0;width:165px;height:340px;pointer-events:none;';
+  L.style.cssText=`position:absolute;bottom:0;left:0;width:165px;height:340px;pointer-events:none;transform:scale(${TREE_SCALE});transform-origin:bottom left;`;
   const R=document.createElement('div');
-  R.style.cssText='position:absolute;bottom:0;right:0;width:165px;height:340px;pointer-events:none;';
-
+  R.style.cssText=`position:absolute;bottom:0;right:0;width:165px;height:340px;pointer-events:none;transform:scale(${TREE_SCALE});transform-origin:bottom right;`;
   // SVG viewBox: 0 0 165 340, 바닥=320
   const GY=320; // 땅 y좌표
-
   function trunk(x,r,op){
     var th=r*0.95, ty=GY-th;
     return `<rect x="${x-r*0.09}" y="${ty}" width="${r*0.18}" height="${th}" rx="${r*0.07}" fill="#8B5E3C" opacity="${op}"/>`;
   }
-
   function springTree(x,r,op){
     var th=r*0.95, ty=GY-th; // 줄기 상단
     var cx=x, cy=ty-r*0.1;   // 수관 중심
@@ -926,7 +874,6 @@ function addTrees(bg,season){
     });
     return s;
   }
-
   function summerTree(x,r,op){
     var th=r*0.95, ty=GY-th;
     var cx=x, cy=ty-r*0.08;
@@ -937,7 +884,6 @@ function addTrees(bg,season){
     s+=`<circle cx="${cx-r*0.16}" cy="${cy-r*0.7}" r="${r*0.18}" fill="#7de890" opacity="${op*0.42}"/>`;
     return s;
   }
-
   function autumnTree(x,r,op){
     var th=r*0.95, ty=GY-th;
     var cx=x, cy=ty-r*0.08;
@@ -950,7 +896,6 @@ function addTrees(bg,season){
     });
     return s;
   }
-
   function winterTree(x,r,op){
     var th=r*0.92, ty=GY-th;
     var cx=x;
@@ -963,14 +908,12 @@ function addTrees(bg,season){
     });
     return s;
   }
-
   var fns={spring:springTree,summer:summerTree,autumn:autumnTree,winter:winterTree};
   var fn=fns[season]||springTree;
   var grass={spring:'#b8d878',summer:'#4a9030',autumn:'#c07818',winter:'white'};
   var gop={spring:0.5,summer:0.48,autumn:0.4,winter:0.5};
   var gc=grass[season]||'#b8d878';
   var go=gop[season]||0.5;
-
   // 큰 나무 r=68, 작은 나무 r=45
   var lsvg=`<svg viewBox="0 0 165 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet">`
     +`<path d="M0,${GY} Q82,${GY-12} 165,${GY} L165,340 L0,340 Z" fill="${gc}" opacity="${go}"/>`
@@ -982,16 +925,13 @@ function addTrees(bg,season){
     +fn(60,68,0.72)
     +fn(133,45,0.58)
     +`</svg>`;
-
   L.innerHTML=lsvg;
   R.innerHTML=rsvg;
   bg.appendChild(L);
   bg.appendChild(R);
 }
-
 function addWxExtra(bg,cond){
   const extras={
-    rain:'<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><path d="M14,98 Q14,28 80,22 Q146,28 146,98 Z" fill="#6090c8" opacity="0.85"/><path d="M14,98 Q27,82 40,98 Q53,114 67,98 Q80,82 93,98 Q106,114 120,98 Q133,82 146,98" fill="#5080b8" opacity="0.9"/><g stroke="#4070a8" stroke-width="1.5" opacity="0.45"><line x1="80" y1="98" x2="14" y2="98"/><line x1="80" y1="98" x2="36" y2="40"/><line x1="80" y1="98" x2="80" y2="22"/><line x1="80" y1="98" x2="124" y2="40"/><line x1="80" y1="98" x2="146" y2="98"/></g><line x1="80" y1="98" x2="80" y2="158" stroke="#3a6098" stroke-width="5.5" stroke-linecap="round"/><path d="M80,158 Q80,174 93,174 Q106,174 106,162" stroke="#3a6098" stroke-width="5.5" fill="none" stroke-linecap="round"/><g stroke="#6090c8" stroke-width="2.5" stroke-linecap="round" opacity="0.7"><line x1="28" y1="122" x2="21" y2="144"/><line x1="56" y1="126" x2="49" y2="148"/><line x1="110" y1="122" x2="103" y2="144"/><line x1="136" y1="126" x2="129" y2="148"/></g></svg>',
     snow:'<svg viewBox="0 0 150 185" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;"><circle cx="75" cy="150" r="32" fill="none" stroke="#a0c0e0" stroke-width="2"/><circle cx="75" cy="104" r="22" fill="none" stroke="#a0c0e0" stroke-width="2"/><circle cx="75" cy="68" r="16" fill="none" stroke="#a0c0e0" stroke-width="2"/><circle cx="69" cy="64" r="2.5" fill="#4488aa"/><circle cx="81" cy="64" r="2.5" fill="#4488aa"/><path d="M68,74 Q75,77 82,74" stroke="#5590aa" stroke-width="1.8" fill="none"/><rect x="61" y="47" width="28" height="20" rx="3" fill="#5580a0" opacity="0.8"/><rect x="54" y="50" width="42" height="6" rx="3" fill="#4470a0" opacity="0.8"/><path d="M57,86 Q75,91 93,86" stroke="#e05050" stroke-width="6" fill="none" stroke-linecap="round"/><g stroke="#a8c8e8" stroke-linecap="round" stroke-width="1.8"><line x1="18" y1="30" x2="18" y2="42"/><line x1="12" y1="36" x2="24" y2="36"/><line x1="14" y1="32" x2="22" y2="40"/><line x1="14" y1="40" x2="22" y2="32"/><line x1="125" y1="45" x2="125" y2="55"/><line x1="120" y1="50" x2="130" y2="50"/><line x1="121.5" y1="46.5" x2="128.5" y2="53.5"/><line x1="121.5" y1="53.5" x2="128.5" y2="46.5"/><line x1="38" y1="155" x2="38" y2="163"/><line x1="34" y1="159" x2="42" y2="159"/><line x1="35" y1="156" x2="41" y2="162"/><line x1="35" y1="162" x2="41" y2="156"/></g></svg>',
   };
   const svg=extras[cond]; if(!svg)return;
@@ -1000,7 +940,6 @@ function addWxExtra(bg,cond){
   el.innerHTML=svg;
   bg.appendChild(el);
 }
-
 // ── 진입점
 show('sc-lock');
 document.getElementById('lock-pw').focus();
