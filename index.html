@@ -843,13 +843,8 @@ function addSkyIcon(bg,cond){
   bg.appendChild(el);
 }
 function addTrees(bg,season){
-  const TREE_SCALE=4.5; // 나무 크기 배율 (기존 대비 약 4.5배)
-  const L=document.createElement('div');
-  L.style.cssText=`position:absolute;bottom:0;left:0;width:165px;height:340px;pointer-events:none;transform:scale(${TREE_SCALE});transform-origin:bottom left;`;
-  const R=document.createElement('div');
-  R.style.cssText=`position:absolute;bottom:0;right:0;width:165px;height:340px;pointer-events:none;transform:scale(${TREE_SCALE});transform-origin:bottom right;`;
-  // SVG viewBox: 0 0 165 340, 바닥=320
-  const GY=320; // 땅 y좌표
+  // 나무마다 박스(SVG)가 따로 있고 지면 y좌표가 달라서 let 으로 두고 그릴 때마다 갱신한다
+  let GY=0;
   function trunk(x,r,op){
     var th=r*0.95, ty=GY-th;
     return `<rect x="${x-r*0.09}" y="${ty}" width="${r*0.18}" height="${th}" rx="${r*0.07}" fill="#8B5E3C" opacity="${op}"/>`;
@@ -901,7 +896,7 @@ function addTrees(bg,season){
     var cx=x;
     var s=trunk(x,r,op);
     [[cx,ty+r*0.15,cx-r*0.65,ty-r*0.32,r*0.07],[cx,ty+r*0.15,cx+r*0.65,ty-r*0.32,r*0.07],[cx,ty-r*0.06,cx-r*0.46,ty-r*0.6,r*0.05],[cx,ty-r*0.06,cx+r*0.46,ty-r*0.6,r*0.05],[cx,ty-r*0.3,cx-r*0.28,ty-r*0.82,r*0.04],[cx,ty-r*0.3,cx+r*0.28,ty-r*0.82,r*0.04],[cx-r*0.65,ty-r*0.32,cx-r*0.85,ty-r*0.56,r*0.03],[cx+r*0.65,ty-r*0.32,cx+r*0.85,ty-r*0.56,r*0.03],[cx-r*0.46,ty-r*0.6,cx-r*0.62,ty-r*0.84,r*0.025],[cx+r*0.46,ty-r*0.6,cx+r*0.62,ty-r*0.84,r*0.025],[cx,ty-r*0.72,cx-r*0.14,ty-r*0.98,r*0.022],[cx,ty-r*0.72,cx+r*0.14,ty-r*0.98,r*0.022]].forEach(function(b){
-      s+=`<line x1="${b[0]}" y1="${b[1]}" x2="${b[2]}" y2="${b[3]}" stroke="#8B6347" stroke-width="${b[4]*165}" stroke-linecap="round" opacity="${op}"/>`;
+      s+=`<line x1="${b[0]}" y1="${b[1]}" x2="${b[2]}" y2="${b[3]}" stroke="#8B6347" stroke-width="${b[4]}" stroke-linecap="round" opacity="${op}"/>`;
     });
     [[cx-r*0.65,ty-r*0.32],[cx+r*0.65,ty-r*0.32],[cx-r*0.46,ty-r*0.6],[cx+r*0.46,ty-r*0.6]].forEach(function(p){
       s+=`<ellipse cx="${p[0]}" cy="${p[1]}" rx="${r*0.12}" ry="${r*0.05}" fill="white" opacity="${op*0.72}"/>`;
@@ -914,21 +909,37 @@ function addTrees(bg,season){
   var gop={spring:0.5,summer:0.48,autumn:0.4,winter:0.5};
   var gc=grass[season]||'#b8d878';
   var go=gop[season]||0.5;
-  // 큰 나무 r=68, 작은 나무 r=45
-  var lsvg=`<svg viewBox="0 0 165 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMaxYMax meet">`
-    +`<path d="M0,${GY} Q82,${GY-12} 165,${GY} L165,340 L0,340 Z" fill="${gc}" opacity="${go}"/>`
-    +fn(105,68,0.72)
-    +fn(32,45,0.58)
-    +`</svg>`;
-  var rsvg=`<svg viewBox="0 0 165 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;" preserveAspectRatio="xMinYMax meet">`
-    +`<path d="M0,${GY} Q82,${GY-12} 165,${GY} L165,340 L0,340 Z" fill="${gc}" opacity="${go}"/>`
-    +fn(60,68,0.72)
-    +fn(133,45,0.58)
-    +`</svg>`;
-  L.innerHTML=lsvg;
-  R.innerHTML=rsvg;
-  bg.appendChild(L);
-  bg.appendChild(R);
+
+  // 1) 화면 전체 폭으로 이어지는 동산 (가운데가 살짝 솟아 나무 세 그루를 자연스럽게 받쳐준다)
+  const ground=document.createElement('div');
+  ground.style.cssText='position:fixed;left:0;bottom:0;width:100%;height:60px;pointer-events:none;';
+  ground.innerHTML=`<svg viewBox="0 0 1000 60" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width:100%;height:100%;"><path d="M0,40 Q500,12 1000,40 L1000,60 L0,60 Z" fill="${gc}" opacity="${go}"/></svg>`;
+  bg.appendChild(ground);
+
+  // 2) 왼쪽 나무 군집 (큰 나무 + 작은 나무) — 옆이 잘리지 않도록 박스를 나무 크기에 맞춰 넉넉히 잡는다
+  GY=624;
+  const leftSvg=`<svg viewBox="0 0 620 624" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">${fn(397,230,0.75)}${fn(150,150,0.62)}</svg>`;
+  const left=document.createElement('div');
+  left.style.cssText='position:fixed;left:0;bottom:14px;width:620px;height:624px;pointer-events:none;';
+  left.innerHTML=leftSvg;
+  bg.appendChild(left);
+
+  // 3) 오른쪽 나무 군집 (왼쪽과 좌우 대칭)
+  GY=624;
+  const rightSvg=`<svg viewBox="0 0 620 624" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">${fn(223,230,0.75)}${fn(470,150,0.62)}</svg>`;
+  const right=document.createElement('div');
+  right.style.cssText='position:fixed;right:0;bottom:14px;width:620px;height:624px;pointer-events:none;';
+  right.innerHTML=rightSvg;
+  bg.appendChild(right);
+
+  // 4) 가운데 나무 한 그루 — 동산을 이어주는 역할. 로그인/로딩 화면에선 보이고,
+  //    앱 화면에서는 가운데 정렬된 콘텐츠(.page)에 자연스럽게 가려진다
+  GY=513;
+  const centerSvg=`<svg viewBox="0 0 380 513" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">${fn(190,190,0.68)}</svg>`;
+  const center=document.createElement('div');
+  center.style.cssText='position:fixed;left:50%;bottom:40px;width:380px;height:513px;pointer-events:none;transform:translateX(-50%);';
+  center.innerHTML=centerSvg;
+  bg.appendChild(center);
 }
 function addWxExtra(bg,cond){
   const extras={
