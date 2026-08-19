@@ -128,7 +128,6 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
 .ver-ago{font-size:11px;color:var(--text3);margin-bottom:8px;}
 .ver-btn{font-size:12px;background:none;border:.5px solid var(--border2);border-radius:5px;padding:4px 10px;cursor:pointer;font-family:inherit;color:var(--text2);}
 .ver-btn:hover{background:var(--bg2);}
-.conflict-box{background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--amber-t);display:none;}
 /* 설정 */
 .set-row{display:flex;gap:8px;margin-top:10px;}
 .set-row input{flex:1;font-size:13px;font-family:inherit;border:.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;background:var(--bg2);color:var(--text);}
@@ -180,13 +179,6 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
     <button class="ver-close" onclick="closeVer()">×</button>
   </div>
   <div class="ver-body">
-    <div class="conflict-box" id="conflict-box">
-      ⚠️ 다른 사람이 저장한 내용이 있어요.
-      <div style="display:flex;gap:6px;margin-top:8px;">
-        <button class="ver-btn" style="background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber-t);" onclick="forceRefresh()">최신 버전 불러오기</button>
-        <button class="ver-btn" onclick="closeVer()">무시하고 계속</button>
-      </div>
-    </div>
     <div id="ver-list"></div>
   </div>
 </div>
@@ -309,6 +301,10 @@ const AV_BG   = ['#E6F1FB','#EAF3DE','#FAEEDA','#FAECE7'];
 const AV_FG   = ['#185FA5','#3B6D11','#854F0B','#993C1D'];
 // ── 상태
 let ms=[], ceo='', curKey='', allWeeks=[], isRO=false, isDirty=false, loadedAt=null;
+// msBaseline/ceoBaseline: 마지막으로 서버와 동기화된(불러왔거나 저장에 반영된) 값.
+// 저장 시 이 값과 다른 필드만 골라 보내서, 동시 편집 중인 다른 사람의 필드를 덮어쓰지 않는다.
+let msBaseline=[], ceoBaseline='';
+const MFIELDS = CATS.flatMap(c=>['t_'+c.id,'n_'+c.id]).concat(['notes']);
 // ── Firebase DB 참조
 const _db = firebase.database(_fbApp);
 const dbWeeks    = () => _db.ref('weeks');
@@ -322,6 +318,10 @@ async function dbGet(ref){
 // SDK 헬퍼: 쓰기
 async function dbSet(ref, val){
   await ref.set(val);
+}
+// SDK 헬퍼: 부분 갱신 (경로별로 지정한 필드만 바꾸고 나머지는 그대로 둠)
+async function dbUpdate(paths){
+  await _db.ref().update(paths);
 }
 // ── 화면 전환
 function show(id){
@@ -435,6 +435,7 @@ async function loadWeek(key){
     }else{ ms=dfltMs(); ceo=''; loadedAt=null; }
   }catch(e){ console.log('loadWeek 오류:',e); ms=dfltMs(); ceo=''; loadedAt=null; }
   isDirty=false;
+  msBaseline=JSON.parse(JSON.stringify(ms)); ceoBaseline=ceo;
   const el=document.getElementById('ceo-in');
   if(el) el.value=ceo;
   document.getElementById('wk-lbl').textContent=weekLabel(key);
@@ -457,6 +458,7 @@ async function carryOver(){
     }catch(e){ console.log('carryOver 오류:',e); }
   }
   ms=nm; ceo=''; isDirty=false; loadedAt=null;
+  msBaseline=JSON.parse(JSON.stringify(ms)); ceoBaseline=ceo;
   const payload={members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(curKey),history:[]};
   await dbSet(dbWeek(curKey), payload);
   const el=document.getElementById('ceo-in');
@@ -465,49 +467,52 @@ async function carryOver(){
   render();
   if(carried){ setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000); }
 }
-// ── 저장
-async function doSave(skipConflict=false){
+// ── 저장 (내가 바꾼 필드만 부분 저장 — 동시에 다른 사람이 저장해도 서로 덮어쓰지 않음)
+async function doSave(){
   if(isRO) return;
   collectVals();
   const btn=document.getElementById('save-btn');
-  btn.disabled=true; setSt('저장 중...');
-  // 충돌 감지
-  if(!skipConflict){
-    try{
-      const d=await dbGet(dbWeek(curKey));
-      if(d&&d.updated&&loadedAt&&d.updated>loadedAt){
-        btn.disabled=false; setSt('⚠️ 충돌 감지');
-        document.getElementById('conflict-box').style.display='block';
-        openVer();
-        return;
-      }
-    }catch{}
+  // 내 baseline과 비교해서, 내가 실제로 바꾼 필드만 골라낸다
+  const changed=[]; // {idx,field}
+  ms.forEach((m,idx)=>{
+    const bm=msBaseline[idx]||{};
+    MFIELDS.forEach(f=>{ if(m[f]!==bm[f]) changed.push({idx,field:f}); });
+  });
+  const ceoChanged = ceo!==ceoBaseline;
+  if(!changed.length && !ceoChanged){
+    isDirty=false; setSt('변경사항 없음'); setTimeout(()=>setSt(''),2000);
+    return;
   }
-  document.getElementById('conflict-box').style.display='none';
-  let history=[];
+  btn.disabled=true; setSt('저장 중...');
   try{
     const d=await dbGet(dbWeek(curKey));
-    history=(d&&Array.isArray(d.history))?d.history:[];
-  }catch{}
-  history.unshift({saved:new Date().toISOString(),ceo,members:JSON.parse(JSON.stringify(ms))});
-  if(history.length>MAX_H) history=history.slice(0,MAX_H);
-  const now=new Date().toISOString();
-  try{
-    await dbSet(dbWeek(curKey),{members:ms,ceo,updated:now,weekLabel:weekLabel(curKey),history});
+    const serverMembers=(d&&Array.isArray(d.members))?d.members:dfltMs();
+    const serverCeo=(d&&d.ceo)||'';
+    const serverHistory=(d&&Array.isArray(d.history))?d.history:[];
+    const base='weeks/'+curKey+'/';
+    const paths={};
+    changed.forEach(({idx,field})=>{ paths[base+'members/'+idx+'/'+field]=ms[idx][field]; });
+    if(ceoChanged) paths[base+'ceo']=ceo;
+    // 히스토리 스냅샷: 서버에 있는 최신 내용에 내가 이번에 바꾼 값만 얹어서 기록
+    const snapMembers=serverMembers.map((sm,idx)=>{
+      const out=Object.assign({},sm);
+      changed.filter(c=>c.idx===idx).forEach(({field})=>{ out[field]=ms[idx][field]; });
+      return out;
+    });
+    let history=serverHistory.slice();
+    const now=new Date().toISOString();
+    history.unshift({saved:now,ceo:ceoChanged?ceo:serverCeo,members:JSON.parse(JSON.stringify(snapMembers))});
+    if(history.length>MAX_H) history=history.slice(0,MAX_H);
+    paths[base+'history']=history;
+    paths[base+'updated']=now;
+    paths[base+'weekLabel']=weekLabel(curKey);
+    await dbUpdate(paths);
+    // 내가 방금 저장한 필드만 baseline 갱신 (다른 사람 필드는 건드리지 않음)
+    changed.forEach(({idx,field})=>{ if(!msBaseline[idx]) msBaseline[idx]={}; msBaseline[idx][field]=ms[idx][field]; });
+    if(ceoChanged) ceoBaseline=ceo;
     loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000);
   }catch(e){ console.log('저장 오류:',e); setSt('저장 실패'); }
   btn.disabled=isRO;
-}
-async function forceRefresh(){
-  document.getElementById('conflict-box').style.display='none';
-  closeVer();
-  show('sc-loading');
-  await loadWeek(curKey);
-  buildSel();
-  document.getElementById('week-sel').value=curKey;
-  updateUI(curKey);
-  show('sc-app');
-  setSt('최신 버전으로 새로고침됐어요'); setTimeout(()=>setSt(''),3000);
 }
 async function doRefresh(){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 새로고침하면 사라져요. 계속할까요?'))return;
@@ -588,6 +593,7 @@ async function startNextWeek(){
     }
   }catch(e){ console.log('startNextWeek 오류:',e); }
   curKey=next; ms=nm; ceo=''; isDirty=false;
+  msBaseline=JSON.parse(JSON.stringify(ms)); ceoBaseline=ceo;
   allWeeks.unshift(next);
   await dbSet(dbWeek(next),{members:ms,ceo,updated:new Date().toISOString(),weekLabel:weekLabel(next),history:[]});
   const ci=document.getElementById('ceo-in'); if(ci) ci.value='';
