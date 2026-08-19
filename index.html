@@ -7,7 +7,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#fff;--bg2:#f7f6f3;--bg3:#f0efe9;오후 3:01 07-21(화)
+  --bg:#fff;--bg2:#f7f6f3;--bg3:#f0efe9;
   --text:#1a1a18;--text2:#6b6a65;--text3:#9c9a92;
   --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
   --green:#1D9E75;--red:#A32D2D;--blue:#185FA5;
@@ -338,9 +338,6 @@ async function sha256(s){
     return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
   }catch{ return btoa(s+'_wk25'); }
 }
-// hardcoded fallback: "sirhr0905"
-const _D=[126,125,105,74,91,0,14,14,112];
-function _ck(pw){ return pw.length===_D.length && [...pw].every((c,i)=>(c.charCodeAt(0)^(i*7+13))===_D[i]); }
 // ── 주차 키 계산
 function weekKey(offset=0){
   const d=new Date(); if(offset) d.setDate(d.getDate()+offset*7);
@@ -388,7 +385,6 @@ async function unlock(){
     const d=await dbGet(dbAuth());
     if(d&&d.hash){ const h=await sha256(pw); ok=(h===d.hash); }
   }catch(e){ console.log('unlock 오류:',e); }
-  if(!ok) ok=_ck(pw);
   if(ok){ await loadAndShow(); }
   else{ err.textContent='비밀번호가 올바르지 않습니다.'; document.getElementById('lock-pw').value=''; document.getElementById('lock-pw').focus(); }
   btn.disabled=false; btn.textContent='입장하기';
