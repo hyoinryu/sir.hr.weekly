@@ -49,7 +49,9 @@ html,body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-se
 .btn-save{background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
 .btn-save:hover{opacity:.85;}
 .btn-save:disabled{opacity:.38;cursor:not-allowed;}
-.save-st{font-size:11px;color:var(--text3);}
+.save-st{display:none;font-size:11px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(255,255,255,.85);color:var(--text2);white-space:nowrap;}
+.save-st.ok{background:#EAF3DE;color:#3B6D11;}
+.save-st.err{background:#FAECE7;color:#993C1D;}
 /* 주차 바 */
 .week-bar{background:rgba(255,255,255,.7);backdrop-filter:blur(8px);border:.5px solid rgba(255,255,255,.9);border-radius:var(--rl);padding:10px 14px;margin-bottom:10px;}
 .week-bar-row{display:flex;align-items:center;gap:8px;}
@@ -202,8 +204,8 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
       </div>
     </div>
     <!-- 액션 버튼 바 -->
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-      <span class="save-st" id="sv-st" style="flex:1;font-size:11px;color:var(--text3);"></span>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <span class="save-st" id="sv-st"></span>
       <button class="btn-action" onclick="openVer()">⏱ 저장 기록</button>
       <button class="btn-action" onclick="doRefresh()">↻ 새로고침</button>
       <button class="btn-save" id="save-btn" onclick="doSave()">저장</button>
@@ -465,7 +467,7 @@ async function carryOver(){
   if(el) el.value='';
   document.getElementById('wk-lbl').textContent=weekLabel(curKey);
   render();
-  if(carried){ setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000); }
+  if(carried){ setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓','ok'); setTimeout(()=>setSt(''),4000); }
 }
 // ── 저장 (내가 바꾼 필드만 부분 저장 — 동시에 다른 사람이 저장해도 서로 덮어쓰지 않음)
 async function doSave(){
@@ -511,10 +513,10 @@ async function doSave(){
     // 내가 방금 저장한 필드만 baseline 갱신 (다른 사람 필드는 건드리지 않음)
     changed.forEach(({idx,field})=>{ if(!msBaseline[idx]) msBaseline[idx]={}; msBaseline[idx][field]=ms[idx][field]; });
     if(ceoChanged) ceoBaseline=ceo;
-    loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000);
+    loadedAt=now; isDirty=false; setSt('저장 완료 ✓','ok'); setTimeout(()=>setSt(''),3000);
     btn.textContent='저장 완료 ✓'; setTimeout(()=>{ btn.textContent='저장'; },1800);
   }catch(e){
-    console.log('저장 오류:',e); setSt('저장 실패');
+    console.log('저장 오류:',e); setSt('저장 실패','err');
     btn.textContent='저장 실패'; setTimeout(()=>{ btn.textContent='저장'; },2000);
   }
   btn.disabled=isRO;
@@ -530,7 +532,12 @@ async function doRefresh(){
   setSt('새로고침 완료'); setTimeout(()=>setSt(''),2000);
 }
 function dirty(){ isDirty=true; setSt('미저장 변경사항 있음'); }
-function setSt(s){ const el=document.getElementById('sv-st'); if(el) el.textContent=s; }
+function setSt(s,type){
+  const el=document.getElementById('sv-st'); if(!el) return;
+  el.textContent=s;
+  el.className='save-st'+(type?' '+type:'');
+  el.style.display = s ? 'inline-block' : 'none';
+}
 function collectVals(){
   const ci=document.getElementById('ceo-in'); if(ci) ceo=ci.value;
   ms.forEach(m=>{
@@ -604,7 +611,7 @@ async function startNextWeek(){
   const ci=document.getElementById('ceo-in'); if(ci) ci.value='';
   document.getElementById('wk-lbl').textContent=weekLabel(next);
   render(); buildSel(); document.getElementById('week-sel').value=next; updateUI(next); show('sc-app');
-  setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓'); setTimeout(()=>setSt(''),4000);
+  setSt('지난 주 할 일 → 이번 주 한 일로 자동 이동됐어요 ✓','ok'); setTimeout(()=>setSt(''),4000);
 }
 // ── 렌더링
 function render(){
