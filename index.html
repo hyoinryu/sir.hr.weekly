@@ -481,9 +481,10 @@ async function doSave(){
   const ceoChanged = ceo!==ceoBaseline;
   if(!changed.length && !ceoChanged){
     isDirty=false; setSt('변경사항 없음'); setTimeout(()=>setSt(''),2000);
+    btn.textContent='변경사항 없음'; setTimeout(()=>{ btn.textContent='저장'; },1500);
     return;
   }
-  btn.disabled=true; setSt('저장 중...');
+  btn.disabled=true; btn.textContent='저장 중...'; setSt('저장 중...');
   try{
     const d=await dbGet(dbWeek(curKey));
     const serverMembers=(d&&Array.isArray(d.members))?d.members:dfltMs();
@@ -511,7 +512,11 @@ async function doSave(){
     changed.forEach(({idx,field})=>{ if(!msBaseline[idx]) msBaseline[idx]={}; msBaseline[idx][field]=ms[idx][field]; });
     if(ceoChanged) ceoBaseline=ceo;
     loadedAt=now; isDirty=false; setSt('저장 완료 ✓'); setTimeout(()=>setSt(''),3000);
-  }catch(e){ console.log('저장 오류:',e); setSt('저장 실패'); }
+    btn.textContent='저장 완료 ✓'; setTimeout(()=>{ btn.textContent='저장'; },1800);
+  }catch(e){
+    console.log('저장 오류:',e); setSt('저장 실패');
+    btn.textContent='저장 실패'; setTimeout(()=>{ btn.textContent='저장'; },2000);
+  }
   btn.disabled=isRO;
 }
 async function doRefresh(){
