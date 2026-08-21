@@ -204,7 +204,7 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
       <button class="btn-action" onclick="openVer()">⏱ 저장 기록</button>
       <button class="btn-action" onclick="doRefresh()">↻ 새로고침</button>
-      <button class="btn-save" id="save-btn" onclick="doSave()">저장</button>
+      <button class="btn-save" id="save-btn" onclick="doSave().catch(()=>{})">저장</button>
       <button class="btn-action" onclick="doLock()">잠금</button>
     </div>
     <!-- 주차 선택 -->
@@ -236,8 +236,8 @@ textarea.ceo-ta{min-height:80px;border-color:var(--amber-bd);}
       </div>
       <div id="mc"></div>
       <div class="row-end">
-        <button class="btn-s" onclick="doSave()">저장</button>
-        <button class="btn-p" onclick="doSave().then(()=>sw('ceo'))">저장하고 대표님 뷰 →</button>
+        <button class="btn-s" onclick="doSave().catch(()=>{})">저장</button>
+        <button class="btn-p" onclick="doSave().then(()=>sw('ceo')).catch(()=>{})">저장하고 대표님 뷰 →</button>
       </div>
     </div>
     <!-- 대표님 뷰 -->
@@ -289,8 +289,7 @@ const _fbApp = firebase.initializeApp({
   appId: "1:869771151725:web:a82a4425e2f5e66045f264",
 });
 const _fbAuth = firebase.auth(_fbApp);
-let _authReady = false;
-const _authPromise = _fbAuth.signInAnonymously().then(()=>{ _authReady=true; }).catch(e=>{ console.log('익명 인증 실패, 계속 진행:', e.message); _authReady=true; });
+const _authPromise = _fbAuth.signInAnonymously().catch(e=>{ console.log('익명 인증 실패, 계속 진행:', e.message); });
 const CATS = [{id:'rec',num:'1',name:'채용'},{id:'eval',num:'2',name:'평가·보상·급여'},{id:'etc',num:'3',name:'기타'}];
 const MEMBERS = ['류효인','허원희','김명진'];
 const LEAD    = '류효인';
@@ -367,9 +366,24 @@ function mkM(id,name){
 }
 function dfltMs(){ return MEMBERS.map((n,i)=>mkM(i+1,n)); }
 function hasCont(m){ return CATS.some(c=>m['t_'+c.id]||m['n_'+c.id])||m.notes; }
+// ── HTML 이스케이프 (사용자 입력을 innerHTML에 넣기 전 항상 통과시킬 것)
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 // ── textarea 높이 자동조절
 function autoResize(el){ el.style.height='auto'; el.style.height=(el.scrollHeight+2)+'px'; }
-function initResize(){ document.querySelectorAll('textarea').forEach(el=>{ autoResize(el); el.addEventListener('input',()=>autoResize(el)); }); }
+// #ceo-in처럼 render() 후에도 재사용되는 textarea에 리스너가 매번 다시 쌓이지 않도록,
+// 이미 리스너를 붙인 요소는 WeakSet으로 기억해뒀다가 건너뛴다
+const _resizeBound=new WeakSet();
+function initResize(){
+  document.querySelectorAll('textarea').forEach(el=>{
+    autoResize(el);
+    if(!_resizeBound.has(el)){
+      el.addEventListener('input',()=>autoResize(el));
+      _resizeBound.add(el);
+    }
+  });
+}
 // ── 잠금/해제
 async function unlock(){
   const pw=document.getElementById('lock-pw').value;
@@ -484,25 +498,30 @@ async function doSave(){
     const d=await dbGet(dbWeek(curKey));
     const serverMembers=(d&&Array.isArray(d.members))?d.members:dfltMs();
     const serverCeo=(d&&d.ceo)||'';
-    const serverHistory=(d&&Array.isArray(d.history))?d.history:[];
     const base='weeks/'+curKey+'/';
     const paths={};
     changed.forEach(({idx,field})=>{ paths[base+'members/'+idx+'/'+field]=ms[idx][field]; });
     if(ceoChanged) paths[base+'ceo']=ceo;
-    // 히스토리 스냅샷: 서버에 있는 최신 내용에 내가 이번에 바꾼 값만 얹어서 기록
+    const now=new Date().toISOString();
+    paths[base+'updated']=now;
+    paths[base+'weekLabel']=weekLabel(curKey);
+    await dbUpdate(paths);
+    // 히스토리 스냅샷: 서버에 있는 최신 내용에 내가 이번에 바꾼 값만 얹어서 기록.
+    // 트랜잭션으로 추가해야, 여러 명이 동시에 저장해도 서로의 저장 기록이 지워지지 않는다
+    // (members/ceo 필드처럼 경로별 부분 저장만으로는 배열 전체를 다시 쓰는 history까지
+    // 안전해지지 않기 때문).
     const snapMembers=serverMembers.map((sm,idx)=>{
       const out=Object.assign({},sm);
       changed.filter(c=>c.idx===idx).forEach(({field})=>{ out[field]=ms[idx][field]; });
       return out;
     });
-    let history=serverHistory.slice();
-    const now=new Date().toISOString();
-    history.unshift({saved:now,ceo:ceoChanged?ceo:serverCeo,members:JSON.parse(JSON.stringify(snapMembers))});
-    if(history.length>MAX_H) history=history.slice(0,MAX_H);
-    paths[base+'history']=history;
-    paths[base+'updated']=now;
-    paths[base+'weekLabel']=weekLabel(curKey);
-    await dbUpdate(paths);
+    const snapCeo=ceoChanged?ceo:serverCeo;
+    await dbWeek(curKey).child('history').transaction(cur=>{
+      let history=Array.isArray(cur)?cur.slice():[];
+      history.unshift({saved:now,ceo:snapCeo,members:JSON.parse(JSON.stringify(snapMembers))});
+      if(history.length>MAX_H) history=history.slice(0,MAX_H);
+      return history;
+    });
     // 내가 방금 저장한 필드만 baseline 갱신 (다른 사람 필드는 건드리지 않음)
     changed.forEach(({idx,field})=>{ if(!msBaseline[idx]) msBaseline[idx]={}; msBaseline[idx][field]=ms[idx][field]; });
     if(ceoChanged) ceoBaseline=ceo;
@@ -511,8 +530,10 @@ async function doSave(){
   }catch(e){
     console.log('저장 오류:',e);
     btn.textContent='저장 실패'; setTimeout(()=>{ btn.textContent='저장'; },2000);
+    throw e; // 저장 실패를 호출한 쪽(.then() 체인 등)에도 알려서, 성공한 것처럼 다음 동작이 이어지지 않게 함
+  }finally{
+    btn.disabled=isRO;
   }
-  btn.disabled=isRO;
 }
 async function doRefresh(){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 새로고침하면 사라져요. 계속할까요?'))return;
@@ -566,7 +587,7 @@ function updateUI(key){
   document.getElementById('ban-ro').style.display=isRO?'block':'none';
   document.getElementById('ban-nw').style.display=isNext?'block':'none';
   if(saveBtn) saveBtn.disabled=isRO;
-  setTimeout(()=>{ document.querySelectorAll('#pg-input textarea').forEach(el=>el.disabled=isRO); },50);
+  document.querySelectorAll('#pg-input textarea').forEach(el=>el.disabled=isRO);
 }
 async function onWeekChange(key){
   if(isDirty&&!confirm('저장하지 않은 내용이 있습니다. 이동하시겠어요?')){ document.getElementById('week-sel').value=curKey; return; }
@@ -601,26 +622,26 @@ async function startNextWeek(){
 // ── 렌더링
 function render(){
   const c=document.getElementById('mc'); c.innerHTML='';
-  ms.forEach(m=>{
-    const idx=ms.indexOf(m)%4;
+  ms.forEach((m,idx)=>{
+    idx=idx%AV_BG.length;
     const div=document.createElement('div'); div.className='card';
     let h=`<div class="mhd">
-      <div class="av" style="background:${AV_BG[idx]};color:${AV_FG[idx]};">${m.name.charAt(0)}</div>
-      <span class="nm">${m.name}</span>
+      <div class="av" style="background:${AV_BG[idx]};color:${AV_FG[idx]};">${esc(m.name.charAt(0))}</div>
+      <span class="nm">${esc(m.name)}</span>
       <div class="dot${hasCont(m)?' on':''}" id="dot-${m.id}"></div>
     </div>`;
     CATS.forEach((cat,ci)=>{
       h+=`<div style="margin-bottom:12px;">
         <div class="sec-row"><span class="sec-n">${cat.num}</span><span class="sec-label">${cat.name}</span></div>
         <div class="col2">
-          <div><div class="col-lbl">한 일</div><textarea id="ta_t_${cat.id}_${m.id}" oninput="dirty();updDot(${m.id})" ${isRO?'disabled':''}>${m['t_'+cat.id]}</textarea></div>
-          <div><div class="col-lbl">할 일</div><textarea id="ta_n_${cat.id}_${m.id}" oninput="dirty();updDot(${m.id})" ${isRO?'disabled':''}>${m['n_'+cat.id]}</textarea></div>
+          <div><div class="col-lbl">한 일</div><textarea id="ta_t_${cat.id}_${m.id}" oninput="dirty();updDot(${m.id})" ${isRO?'disabled':''}>${esc(m['t_'+cat.id])}</textarea></div>
+          <div><div class="col-lbl">할 일</div><textarea id="ta_n_${cat.id}_${m.id}" oninput="dirty();updDot(${m.id})" ${isRO?'disabled':''}>${esc(m['n_'+cat.id])}</textarea></div>
         </div>
       </div>${ci<CATS.length-1?'<div class="dv"></div>':''}`;
     });
     h+=`<div class="dv"></div>
       <div class="sec-row"><span class="sec-n w">!</span><span class="sec-label w">논의사항</span></div>
-      <textarea class="sm" id="ta_notes_${m.id}" oninput="dirty();updDot(${m.id})" ${isRO?'disabled':''}>${m.notes}</textarea>`;
+      <textarea class="sm" id="ta_notes_${m.id}" oninput="dirty();updDot(${m.id})" ${isRO?'disabled':''}>${esc(m.notes)}</textarea>`;
     div.innerHTML=h; c.appendChild(div);
   });
   setTimeout(initResize,50);
@@ -649,18 +670,18 @@ function rCeo(){
   const lead=ms.find(m=>m.name===LEAD);
   if(lead){
     const d=document.createElement('div'); d.className='lead-card';
-    let h=`<div class="lead-name">${lead.name}<span class="lead-badge">팀장</span></div>`;
+    let h=`<div class="lead-name">${esc(lead.name)}<span class="lead-badge">팀장</span></div>`;
     CATS.forEach(cat=>{
       const tw=lead['t_'+cat.id],nw=lead['n_'+cat.id]; if(!tw&&!nw)return;
       h+=`<div style="margin-bottom:14px;">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px;"><span class="sec-n">${cat.num}</span><span class="sec-label">${cat.name}</span></div>
         <div class="lead-grid">
-          <div><div class="lead-lbl">한 일</div><div class="lead-val">${tw||'—'}</div></div>
-          <div><div class="lead-lbl">할 일</div><div class="lead-val">${nw||'—'}</div></div>
+          <div><div class="lead-lbl">한 일</div><div class="lead-val">${esc(tw||'—')}</div></div>
+          <div><div class="lead-lbl">할 일</div><div class="lead-val">${esc(nw||'—')}</div></div>
         </div>
       </div>`;
     });
-    if(lead.notes) h+=`<div style="padding-top:10px;border-top:.5px solid var(--border);"><span class="tag-w">논의사항</span><div class="lead-val" style="margin-top:6px;font-size:13px;">${lead.notes}</div></div>`;
+    if(lead.notes) h+=`<div style="padding-top:10px;border-top:.5px solid var(--border);"><span class="tag-w">논의사항</span><div class="lead-val" style="margin-top:6px;font-size:13px;">${esc(lead.notes)}</div></div>`;
     if(!hasCont(lead)) h+=`<div class="eh">아직 입력된 내용이 없습니다</div>`;
     d.innerHTML=h; lw.appendChild(d);
   }
@@ -671,18 +692,18 @@ function rCeo(){
   teamMs.forEach(m=>{
     if(!hasCont(m))return;
     const d=document.createElement('div'); d.className='team-card';
-    let h=`<div class="team-name">${m.name}</div>`;
+    let h=`<div class="team-name">${esc(m.name)}</div>`;
     CATS.forEach(cat=>{
       const tv=m['t_'+cat.id],nv=m['n_'+cat.id]; if(!tv&&!nv)return;
       h+=`<div style="margin-bottom:8px;">
         <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;"><span class="sec-n" style="font-size:10px;padding:1px 5px;">${cat.num}</span><span style="font-size:10px;font-weight:600;color:var(--text3);">${cat.name}</span></div>
         <div class="team-grid">
-          <div><div class="team-lbl">한 일</div><div class="team-val">${tv||'—'}</div></div>
-          <div><div class="team-lbl">할 일</div><div class="team-val">${nv||'—'}</div></div>
+          <div><div class="team-lbl">한 일</div><div class="team-val">${esc(tv||'—')}</div></div>
+          <div><div class="team-lbl">할 일</div><div class="team-val">${esc(nv||'—')}</div></div>
         </div>
       </div>`;
     });
-    if(m.notes) h+=`<div style="padding-top:6px;border-top:.5px solid var(--border);margin-top:4px;"><span class="tag-w">논의사항</span><div class="team-val" style="margin-top:3px;">${m.notes}</div></div>`;
+    if(m.notes) h+=`<div style="padding-top:6px;border-top:.5px solid var(--border);margin-top:4px;"><span class="tag-w">논의사항</span><div class="team-val" style="margin-top:3px;">${esc(m.notes)}</div></div>`;
     d.innerHTML=h; tw.appendChild(d);
   });
 }
